@@ -6,7 +6,7 @@ export const metadata = { title: "Sign in" };
 
 export default function LoginPage() {
   return (
-    <AuthShell title="Sign in" subtitle="Welcome back to the Five9 Media project tracker.">
+    <AuthShell title="Sign in" subtitle="Welcome back to the Five9 Media request tracker.">
       <Suspense>
         <LoginForm />
       </Suspense>

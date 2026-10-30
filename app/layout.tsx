@@ -7,7 +7,7 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 
 export const metadata: Metadata = {
   title: { default: "Five9 Media", template: "%s · Five9 Media" },
-  description: "Five9 Media project tracker",
+  description: "Five9 Media request tracker",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

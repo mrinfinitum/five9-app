@@ -4,7 +4,7 @@ import { requestCode, statusName } from "@/lib/requests/constants";
 import { SATISFACTION_FACES, createSurvey } from "@/lib/requests/survey";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail, teamNotificationEmails } from "./send";
-import { button, escapeHtml, layout, quote } from "./templates";
+import { button, escapeHtml, layout as baseLayout, quote } from "./templates";
 
 export type RequestEvent =
   | { kind: "created"; requestId: string; actorId: string }
@@ -49,6 +49,7 @@ export function notify(event: RequestEvent, origin: string) {
 }
 
 async function deliver(event: RequestEvent, origin: string) {
+  const layout = (content: string) => baseLayout(content, origin);
   const admin = createAdminClient();
   const { data: request } = await admin
     .from("requests")
