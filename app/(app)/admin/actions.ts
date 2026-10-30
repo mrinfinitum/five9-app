@@ -220,15 +220,28 @@ export async function deleteBoardAction(boardId: string): Promise<AdminResult> {
 
 async function ensureLogoBucket() {
   const storage = createAdminClient().storage;
+  const settings = { public: true, fileSizeLimit: MAX_LOGO_BYTES, allowedMimeTypes: [...LOGO_TYPES] };
   const { data } = await storage.getBucket(BOARD_LOGO_BUCKET);
   if (!data) {
-    const { error } = await storage.createBucket(BOARD_LOGO_BUCKET, {
-      public: true,
-      fileSizeLimit: MAX_LOGO_BYTES,
-      allowedMimeTypes: [...LOGO_TYPES],
-    });
+    const { error } = await storage.createBucket(BOARD_LOGO_BUCKET, settings);
     if (error && !/already exists/i.test(error.message)) throw new Error(error.message);
+  } else if (!LOGO_TYPES.every((type) => data.allowed_mime_types?.includes(type))) {
+    // Older buckets were created before SVG was allowed.
+    const { error } = await storage.updateBucket(BOARD_LOGO_BUCKET, settings);
+    if (error) throw new Error(error.message);
   }
+}
+
+/**
+ * SVGs can carry scripts and links. Logos only need shapes and colours, so
+ * anything active is refused outright rather than cleaned up.
+ */
+function svgProblem(svg: string) {
+  if (!/<svg[\s>]/i.test(svg)) return "That file isn't a valid SVG.";
+  if (/<script|<foreignObject|<iframe|<embed|<object|<use[^>]+href\s*=\s*["']?(?!#)/i.test(svg)) return "This SVG contains scripts or embedded content. Export it as a plain SVG.";
+  if (/\son[a-z]+\s*=/i.test(svg) || /javascript:/i.test(svg)) return "This SVG contains scripts. Export it as a plain SVG.";
+  if (/<!ENTITY/i.test(svg)) return "This SVG uses entities, which aren't allowed.";
+  return null;
 }
 
 /** One-time upload URL for a board logo (PNG, JPG, WebP, or GIF up to 2 MB). */
@@ -240,10 +253,10 @@ export async function createBoardLogoUploadAction(
   try {
     const actor = await getCurrentUser();
     if (!actor?.isAdmin) throw new Error("Admins only.");
-    if (!(LOGO_TYPES as readonly string[]).includes(contentType)) throw new Error("Use a PNG, JPG, WebP, or GIF image.");
+    if (!(LOGO_TYPES as readonly string[]).includes(contentType)) throw new Error("Use an SVG, PNG, JPG, WebP, or GIF image.");
     if (size > MAX_LOGO_BYTES) throw new Error("Logos can be up to 2 MB.");
     await ensureLogoBucket();
-    const ext = contentType === "image/jpeg" ? "jpg" : contentType.split("/")[1];
+    const ext = contentType === "image/jpeg" ? "jpg" : contentType === "image/svg+xml" ? "svg" : contentType.split("/")[1];
     const path = `${boardId}/${randomUUID()}.${ext}`;
     const { data, error } = await createAdminClient().storage.from(BOARD_LOGO_BUCKET).createSignedUploadUrl(path);
     if (error || !data) throw new Error(error?.message ?? "Couldn't start the upload.");
@@ -256,18 +269,47 @@ export async function createBoardLogoUploadAction(
 /**
  * Saves an uploaded logo for dark or light mode (or clears it with null) and
  * deletes the replaced file. With only one logo set, it's used in both modes.
+ * An SVG is always the board's single logo for both modes (colour each mode
+ * with the tint instead), so it replaces both slots.
  */
 export async function setBoardLogoAction(boardId: string, path: string | null, mode: "dark" | "light"): Promise<AdminResult> {
   return guard(async () => {
     if (path && !path.startsWith(`${boardId}/`)) throw new Error("That file doesn't belong to this board.");
-    const column = mode === "light" ? "logo_light_path" : "logo_path";
     const admin = createAdminClient();
+    const isSvg = Boolean(path?.endsWith(".svg"));
+    if (isSvg) {
+      const { data: file } = await admin.storage.from(BOARD_LOGO_BUCKET).download(path!);
+      const problem = file ? svgProblem(await file.text()) : "Couldn't read the uploaded SVG.";
+      if (problem) {
+        await admin.storage.from(BOARD_LOGO_BUCKET).remove([path!]);
+        throw new Error(problem);
+      }
+    }
     const { data: board } = await admin.from("boards").select("logo_path, logo_light_path").eq("id", boardId).maybeSingle();
-    const { error } = await admin.from("boards").update({ [column]: path }).eq("id", boardId);
+    const update = isSvg
+      ? { logo_path: path, logo_light_path: null }
+      : { [mode === "light" ? "logo_light_path" : "logo_path"]: path };
+    const { error } = await admin.from("boards").update(update).eq("id", boardId);
     if (error) throw new Error(error.message);
-    const previous = board?.[column];
-    if (previous && previous !== path) await admin.storage.from(BOARD_LOGO_BUCKET).remove([previous]);
+
+    const replaced = isSvg
+      ? [board?.logo_path, board?.logo_light_path]
+      : [mode === "light" ? board?.logo_light_path : board?.logo_path];
+    const stale = replaced.filter((p): p is string => Boolean(p) && p !== path);
+    if (stale.length) await admin.storage.from(BOARD_LOGO_BUCKET).remove(stale);
+
+    if (isSvg) return "SVG logo saved — it's used in both modes. Pick a color for each mode below it.";
     const label = mode === "light" ? "Light-mode logo" : "Dark-mode logo";
     return path ? `${label} updated.` : `${label} removed.`;
+  });
+}
+
+/** Paints a logo slot in one colour (e.g. white for dark mode), or back to its original colours with null. */
+export async function setBoardLogoTintAction(boardId: string, mode: "dark" | "light", color: string | null): Promise<AdminResult> {
+  return guard(async () => {
+    if (color !== null && !/^#[0-9a-fA-F]{6}$/.test(color)) throw new Error("Pick a colour like #ffffff.");
+    const column = mode === "light" ? "logo_light_tint" : "logo_dark_tint";
+    const { error } = await createAdminClient().from("boards").update({ [column]: color?.toLowerCase() ?? null }).eq("id", boardId);
+    if (error) throw new Error(error.message);
   });
 }

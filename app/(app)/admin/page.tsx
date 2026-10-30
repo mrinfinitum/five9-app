@@ -33,7 +33,7 @@ async function AdminLoader() {
   const [usersResult, profilesResult, boardsResult, membersResult, requestsResult] = await Promise.all([
     admin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
     admin.from("profiles").select("id, email, full_name, role, is_active"),
-    admin.from("boards").select("id, name, slug, description, logo_path, logo_light_path, created_at").order("name"),
+    admin.from("boards").select("id, name, slug, description, logo_path, logo_light_path, logo_dark_tint, logo_light_tint, created_at").order("name"),
     admin.from("board_members").select("board_id, user_id, access"),
     admin.from("requests").select("board_id"),
   ]);
@@ -80,6 +80,8 @@ async function AdminLoader() {
     description: b.description,
     logoDarkUrl: boardLogoUrl(b.logo_path),
     logoLightUrl: boardLogoUrl(b.logo_light_path),
+    logoDarkTint: b.logo_dark_tint,
+    logoLightTint: b.logo_light_tint,
     requestCount: requestCounts.get(b.id) ?? 0,
   }));
 

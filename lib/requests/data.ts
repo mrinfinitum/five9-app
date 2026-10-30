@@ -104,9 +104,9 @@ export async function listRequestTypes(): Promise<RequestType[]> {
   return data ?? [];
 }
 
-const BOARD_SELECT = "id, name, slug, description, logo_path, logo_light_path";
+const BOARD_SELECT = "id, name, slug, description, logo_path, logo_light_path, logo_dark_tint, logo_light_tint";
 
-type BoardRow = { id: string; name: string; slug: string; description: string | null; logo_path: string | null; logo_light_path: string | null };
+type BoardRow = { id: string; name: string; slug: string; description: string | null; logo_path: string | null; logo_light_path: string | null; logo_dark_tint: string | null; logo_light_tint: string | null };
 
 export function mapBoard(row: BoardRow): Board {
   return {
@@ -116,6 +116,8 @@ export function mapBoard(row: BoardRow): Board {
     description: row.description,
     logoDarkUrl: boardLogoUrl(row.logo_path),
     logoLightUrl: boardLogoUrl(row.logo_light_path),
+    logoDarkTint: row.logo_dark_tint,
+    logoLightTint: row.logo_light_tint,
   };
 }
 

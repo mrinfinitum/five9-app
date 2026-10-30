@@ -20,6 +20,9 @@ export type Board = {
   logoDarkUrl: string | null;
   /** Logo shown in light mode (falls back to the dark-mode logo). */
   logoLightUrl: string | null;
+  /** Optional single colour to paint the logo in each mode (e.g. "#ffffff"). */
+  logoDarkTint: string | null;
+  logoLightTint: string | null;
 };
 
 export type RequestType = { key: string; name: string };

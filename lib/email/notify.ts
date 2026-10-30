@@ -82,9 +82,10 @@ async function deliver(event: RequestEvent, origin: string) {
     logo_light_path: string | null;
   } | null;
   // Emails have a white body: use the light-mode logo, or the dark-mode one on a black tile.
+  // Many email apps (Gmail included) don't show SVGs, so SVG logos are left out of emails.
   const lightLogo = boardLogoUrl(board?.logo_light_path);
   const logoUrl = lightLogo ?? boardLogoUrl(board?.logo_path);
-  if (logoUrl) {
+  if (logoUrl && !logoUrl.endsWith(".svg")) {
     const tile = lightLogo ? "transparent" : "#0a0a0a";
     const banner = `<div style="margin:0 0 18px"><span style="display:inline-block;padding:8px 12px;border-radius:8px;background:${tile}"><img src="${escapeHtml(logoUrl)}" alt="${escapeHtml(board?.name ?? "")}" height="40" style="display:block;height:40px;width:auto;border:0" /></span></div>`;
     const plain = layout;

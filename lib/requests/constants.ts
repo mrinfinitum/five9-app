@@ -60,7 +60,7 @@ export function requestCode(number: number) {
 
 export const BOARD_LOGO_BUCKET = "board-logos";
 export const MAX_LOGO_BYTES = 2 * 1024 * 1024;
-export const LOGO_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"] as const;
+export const LOGO_TYPES = ["image/svg+xml", "image/png", "image/jpeg", "image/webp", "image/gif"] as const;
 
 /** Public URL for a file in the board-logos bucket. */
 export function boardLogoUrl(path: string | null | undefined) {

@@ -2,11 +2,12 @@
 
 import { ExternalLink, ImagePlus, Pencil, KanbanSquare, Lock, MailPlus, Plus, RotateCw, ShieldCheck, Trash2, UserRound, Users } from "lucide-react";
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import {
   createBoardAction,
   createBoardLogoUploadAction,
   setBoardLogoAction,
+  setBoardLogoTintAction,
   deleteBoardAction,
   deleteUserAction,
   inviteUserAction,
@@ -19,6 +20,7 @@ import {
   type AdminResult,
   type BoardGrant,
 } from "@/app/(app)/admin/actions";
+import { LogoImage } from "@/components/board-logo";
 import { ConfirmDialog, Dialog } from "@/components/ui/dialog";
 import { BOARD_LOGO_BUCKET, LOGO_TYPES, MAX_LOGO_BYTES } from "@/lib/requests/constants";
 import { createClient } from "@/lib/supabase/client";
@@ -46,6 +48,8 @@ export type AdminBoardRow = {
   description: string | null;
   logoDarkUrl: string | null;
   logoLightUrl: string | null;
+  logoDarkTint: string | null;
+  logoLightTint: string | null;
   requestCount: number;
 };
 
@@ -600,31 +604,59 @@ function Badge({ tone, children }: { tone: "green" | "amber" | "muted"; children
 }
 
 function LogoEditor({ board, disabled, run }: { board: AdminBoardRow; disabled: boolean; run: Run }) {
+  const svg = board.logoDarkUrl?.endsWith(".svg") && !board.logoLightUrl;
+  if (svg) return <SvgLogoEditor board={board} disabled={disabled} run={run} />;
   const onlyOne = Boolean(board.logoDarkUrl) !== Boolean(board.logoLightUrl);
   return (
-    <div className="w-60 shrink-0 space-y-2">
+    <div className="w-72 shrink-0 space-y-2">
       <div className="grid grid-cols-2 gap-2">
         <LogoSlot board={board} disabled={disabled} mode="dark" run={run} />
         <LogoSlot board={board} disabled={disabled} mode="light" run={run} />
       </div>
       <p className="text-[0.7rem] text-muted">
-        {onlyOne ? "One logo is used in both modes until you add the other." : "PNG, JPG, WebP or GIF · up to 2 MB each"}
+        {onlyOne
+          ? "One logo is used in both modes until you add the other."
+          : "Tip: upload an SVG once and pick a color for each mode. PNG, JPG, WebP or GIF also work · up to 2 MB."}
       </p>
     </div>
   );
 }
 
-function LogoSlot({ board, mode, disabled, run }: { board: AdminBoardRow; mode: "dark" | "light"; disabled: boolean; run: Run }) {
+/** One SVG for both modes, with a colour per mode. */
+function SvgLogoEditor({ board, disabled, run }: { board: AdminBoardRow; disabled: boolean; run: Run }) {
+  const { busy, error, upload } = useLogoUpload(board, "dark", run);
+  return (
+    <div className="w-72 shrink-0 space-y-2">
+      <span className="block text-[0.65rem] font-semibold uppercase tracking-wider text-muted">SVG logo · both modes</span>
+      <div className="grid grid-cols-2 gap-2">
+        {(["dark", "light"] as const).map((mode) => {
+          const tint = mode === "dark" ? board.logoDarkTint : board.logoLightTint;
+          return (
+            <div className="space-y-1" key={mode}>
+              <LogoPreview board={board} mode={mode} src={board.logoDarkUrl!} tint={tint} />
+              <TintPicker disabled={disabled} mode={mode} onChange={(color) => run(() => setBoardLogoTintAction(board.id, mode, color))} value={tint} />
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex flex-wrap gap-1">
+        <UploadButton busy={busy} disabled={disabled} label="Replace" onFile={upload} />
+        <button className="btn-ghost px-1.5 py-0.5 text-[0.7rem]" disabled={disabled} onClick={() => run(() => setBoardLogoAction(board.id, null, "dark"))} type="button">
+          Remove
+        </button>
+      </div>
+      {error ? <p className="text-[0.7rem] text-red-300" role="alert">{error}</p> : null}
+    </div>
+  );
+}
+
+function useLogoUpload(board: AdminBoardRow, mode: "dark" | "light", run: Run) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const own = mode === "dark" ? board.logoDarkUrl : board.logoLightUrl;
-  const fallback = mode === "dark" ? board.logoLightUrl : board.logoDarkUrl;
-  const shown = own ?? fallback;
-
   async function upload(file: File | undefined) {
     if (!file) return;
     setError(null);
-    if (!(LOGO_TYPES as readonly string[]).includes(file.type)) return setError("Use PNG, JPG, WebP, or GIF.");
+    if (!(LOGO_TYPES as readonly string[]).includes(file.type)) return setError("Use SVG, PNG, JPG, WebP, or GIF.");
     if (file.size > MAX_LOGO_BYTES) return setError("Up to 2 MB.");
     setBusy(true);
     try {
@@ -641,46 +673,155 @@ function LogoSlot({ board, mode, disabled, run }: { board: AdminBoardRow; mode: 
       setBusy(false);
     }
   }
+  return { busy, error, upload };
+}
+
+function UploadButton({ busy, disabled, label, onFile }: { busy: boolean; disabled: boolean; label: string; onFile: (file: File | undefined) => void }) {
+  return (
+    <label className={`btn-ghost cursor-pointer px-1.5 py-0.5 text-[0.7rem] ${busy || disabled ? "pointer-events-none opacity-60" : ""}`}>
+      <ImagePlus className="h-3 w-3" /> {busy ? "Uploading…" : label}
+      <input
+        accept={LOGO_TYPES.join(",")}
+        className="hidden"
+        onChange={(e) => {
+          onFile(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+        type="file"
+      />
+    </label>
+  );
+}
+
+/** Preview on the background the logo will actually appear on. */
+function LogoPreview({
+  board,
+  mode,
+  src,
+  tint,
+  faded = false,
+}: {
+  board: AdminBoardRow;
+  mode: "dark" | "light";
+  src: string | null;
+  tint: string | null;
+  faded?: boolean;
+}) {
+  return (
+    <div
+      className={`relative grid h-16 place-items-center overflow-hidden rounded-lg border p-2 ${
+        mode === "dark" ? "border-[#2a2a2a] bg-[#0a0a0a]" : "border-[#e0e0de] bg-[#f4f4f3]"
+      }`}
+      title={mode === "dark" ? "Dark mode" : "Light mode"}
+    >
+      {src ? (
+        <span className={faded ? "opacity-60" : ""}>
+          <LogoImage alt={`${board.name} ${mode} mode logo`} height={44} src={src} tint={tint} />
+        </span>
+      ) : (
+        <span className={`text-[0.7rem] ${mode === "dark" ? "text-[#9a9a9a]" : "text-[#686868]"}`}>No logo</span>
+      )}
+      <span className={`absolute left-1 top-0.5 text-[0.55rem] font-semibold uppercase ${mode === "dark" ? "text-[#9a9a9a]" : "text-[#686868]"}`}>
+        {mode}
+      </span>
+      {src && faded ? <span className="absolute bottom-0.5 right-1 text-[0.55rem] font-semibold uppercase text-brand">Shared</span> : null}
+    </div>
+  );
+}
+
+function LogoSlot({ board, mode, disabled, run }: { board: AdminBoardRow; mode: "dark" | "light"; disabled: boolean; run: Run }) {
+  const { busy, error, upload } = useLogoUpload(board, mode, run);
+  const own = mode === "dark" ? board.logoDarkUrl : board.logoLightUrl;
+  const fallback = mode === "dark" ? board.logoLightUrl : board.logoDarkUrl;
+  const shown = own ?? fallback;
+  const tint = mode === "dark" ? board.logoDarkTint : board.logoLightTint;
 
   return (
     <div className="space-y-1">
-      <span className="block text-[0.65rem] font-semibold uppercase tracking-wider text-muted">{mode === "dark" ? "Dark mode" : "Light mode"}</span>
-      {/* Preview on the background it will actually appear on. */}
-      <div
-        className={`relative grid h-16 place-items-center overflow-hidden rounded-lg border p-2 ${
-          mode === "dark" ? "border-[#2a2a2a] bg-[#0a0a0a]" : "border-[#e0e0de] bg-[#f4f4f3]"
-        }`}
-      >
-        {shown ? (
-          // eslint-disable-next-line @next/next/no-img-element -- small admin preview of a just-uploaded file
-          <img alt={`${board.name} ${mode} mode logo`} className={`max-h-full max-w-full object-contain ${own ? "" : "opacity-50"}`} src={shown} />
-        ) : (
-          <span className={`text-[0.7rem] ${mode === "dark" ? "text-[#9a9a9a]" : "text-[#686868]"}`}>No logo</span>
-        )}
-        {shown && !own ? (
-          <span className="absolute bottom-0.5 right-1 text-[0.55rem] font-semibold uppercase text-brand">Shared</span>
-        ) : null}
-      </div>
+      <LogoPreview board={board} faded={!own} mode={mode} src={shown} tint={tint} />
       <div className="flex flex-wrap gap-1">
-        <label className={`btn-ghost cursor-pointer px-1.5 py-0.5 text-[0.7rem] ${busy || disabled ? "pointer-events-none opacity-60" : ""}`}>
-          <ImagePlus className="h-3 w-3" /> {busy ? "Uploading…" : own ? "Replace" : "Upload"}
-          <input
-            accept={LOGO_TYPES.join(",")}
-            className="hidden"
-            onChange={(e) => {
-              void upload(e.target.files?.[0]);
-              e.target.value = "";
-            }}
-            type="file"
-          />
-        </label>
+        <UploadButton busy={busy} disabled={disabled} label={own ? "Replace" : "Upload"} onFile={upload} />
         {own ? (
           <button className="btn-ghost px-1.5 py-0.5 text-[0.7rem]" disabled={disabled} onClick={() => run(() => setBoardLogoAction(board.id, null, mode))} type="button">
             Remove
           </button>
         ) : null}
       </div>
+      {shown ? <TintPicker disabled={disabled} mode={mode} onChange={(color) => run(() => setBoardLogoTintAction(board.id, mode, color))} value={tint} /> : null}
       {error ? <p className="text-[0.7rem] text-red-300" role="alert">{error}</p> : null}
+    </div>
+  );
+}
+
+const TINT_PRESETS = [
+  { label: "White", value: "#ffffff" },
+  { label: "Black", value: "#121212" },
+  { label: "Five9 red", value: "#e10600" },
+];
+
+/** Original colours, a preset, or any custom colour for one logo slot. */
+function TintPicker({
+  value,
+  mode,
+  disabled,
+  onChange,
+}: {
+  value: string | null;
+  mode: "dark" | "light";
+  disabled: boolean;
+  onChange: (color: string | null) => void;
+}) {
+  const [custom, setCustom] = useState(value ?? (mode === "dark" ? "#ffffff" : "#121212"));
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const swatch = "h-4 w-4 rounded-full ring-1 ring-[#8a8a8a]";
+  return (
+    <div className="space-y-1">
+      <span className="block text-[0.6rem] font-semibold uppercase tracking-wider text-muted">Color</span>
+      <div className="flex flex-wrap items-center gap-1" role="group" aria-label={`${mode} mode logo color`}>
+        <button
+          aria-pressed={!value}
+          className={`rounded px-1.5 py-0.5 text-[0.65rem] ${!value ? "bg-brand text-on-brand" : "text-muted hover:text-white"}`}
+          disabled={disabled}
+          onClick={() => onChange(null)}
+          title="Keep the logo's own colors"
+          type="button"
+        >
+          Original
+        </button>
+        {TINT_PRESETS.map((preset) => (
+          <button
+            aria-label={preset.label}
+            aria-pressed={value === preset.value}
+            className={`grid h-6 w-6 place-items-center rounded ${value === preset.value ? "ring-2 ring-brand" : ""}`}
+            disabled={disabled}
+            key={preset.value}
+            onClick={() => onChange(preset.value)}
+            title={preset.label}
+            type="button"
+          >
+            <span className={swatch} style={{ background: preset.value }} />
+          </button>
+        ))}
+        <label
+          className={`relative grid h-6 w-6 cursor-pointer place-items-center rounded ${value && !TINT_PRESETS.some((p) => p.value === value) ? "ring-2 ring-brand" : ""}`}
+          title="Custom color"
+        >
+          <span className={swatch} style={{ background: "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)" }} />
+          <input
+            aria-label="Custom color"
+            className="absolute inset-0 cursor-pointer opacity-0"
+            disabled={disabled}
+            onChange={(e) => {
+              const color = e.target.value;
+              setCustom(color);
+              if (timer.current) clearTimeout(timer.current);
+              timer.current = setTimeout(() => onChange(color), 500);
+            }}
+            type="color"
+            value={custom}
+          />
+        </label>
+      </div>
     </div>
   );
 }
