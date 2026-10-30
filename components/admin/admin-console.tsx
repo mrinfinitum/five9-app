@@ -50,6 +50,8 @@ export type AdminBoardRow = {
   logoLightUrl: string | null;
   logoDarkTint: string | null;
   logoLightTint: string | null;
+  /** PNG copy used in emails (generated from the light-mode logo). */
+  emailLogoUrl: string | null;
   requestCount: number;
 };
 
@@ -611,6 +613,18 @@ function LogoEditor({ board, disabled, run }: { board: AdminBoardRow; disabled: 
         <LogoSlot board={board} disabled={disabled} mode="dark" run={run} />
         <LogoSlot board={board} disabled={disabled} mode="light" run={run} />
       </div>
+      {board.emailLogoUrl ? (
+        <div
+          className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 ${
+            !board.logoLightUrl && !board.logoLightTint ? "border-[#2a2a2a] bg-[#0a0a0a]" : "border-[#e0e0de] bg-[#ffffff]"
+          }`}
+          title="PNG copy used in emails"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element -- generated PNG preview */}
+          <img alt={`${board.name} email logo`} className="h-6 w-auto max-w-[140px] object-contain" src={board.emailLogoUrl} />
+          <span className="ml-auto text-[0.6rem] font-semibold uppercase tracking-wider text-[#686868]">Email · PNG</span>
+        </div>
+      ) : null}
       <p className="text-[0.7rem] text-muted">
         {onlyOne
           ? "One logo is used in both modes until you add the other — use Color to repaint it per mode."

@@ -1,6 +1,7 @@
 import "server-only";
 import { after } from "next/server";
 import { boardLogoUrl, requestCode, statusName } from "@/lib/requests/constants";
+import { refreshEmailLogo } from "@/lib/requests/email-logo";
 import { SATISFACTION_FACES, createSurvey } from "@/lib/requests/survey";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail, teamNotificationEmails } from "./send";
@@ -53,7 +54,7 @@ async function deliver(event: RequestEvent, origin: string) {
   const admin = createAdminClient();
   const { data: request } = await admin
     .from("requests")
-    .select("id, board_id, number, title, status, requester_id, description, boards(slug, name, logo_path, logo_light_path)")
+    .select("id, board_id, number, title, status, requester_id, description, boards(id, slug, name, logo_path, logo_light_path, logo_light_tint, email_logo_path)")
     .eq("id", event.requestId)
     .maybeSingle();
   if (!request) return;
@@ -80,13 +81,21 @@ async function deliver(event: RequestEvent, origin: string) {
     name: string;
     logo_path: string | null;
     logo_light_path: string | null;
+    id: string;
+    logo_light_tint: string | null;
+    email_logo_path: string | null;
   } | null;
   // Emails have a white body: use the light-mode logo, or the dark-mode one on a black tile.
-  // Many email apps (Gmail included) don't show SVGs, so SVG logos are left out of emails.
-  const lightLogo = boardLogoUrl(board?.logo_light_path);
-  const logoUrl = lightLogo ?? boardLogoUrl(board?.logo_path);
-  if (logoUrl && !logoUrl.endsWith(".svg")) {
-    const tile = lightLogo ? "transparent" : "#0a0a0a";
+  // Emails use a PNG copy of the board logo (made from the light-mode logo and its colour),
+  // since many email apps can't show SVGs. Boards from before this feature get one on first use.
+  let emailLogo = board?.email_logo_path ?? null;
+  if (!emailLogo && board && (board.logo_light_path || board.logo_path)) {
+    emailLogo = await refreshEmailLogo(board.id).catch(() => null);
+  }
+  const logoUrl = boardLogoUrl(emailLogo);
+  if (logoUrl) {
+    // A dark-mode-only logo without a light-mode colour is usually white: show it on black.
+    const tile = board?.logo_light_path || board?.logo_light_tint ? "transparent" : "#0a0a0a";
     const banner = `<div style="margin:0 0 18px"><span style="display:inline-block;padding:8px 12px;border-radius:8px;background:${tile}"><img src="${escapeHtml(logoUrl)}" alt="${escapeHtml(board?.name ?? "")}" height="40" style="display:block;height:40px;width:auto;border:0" /></span></div>`;
     const plain = layout;
     layout = (content: string) => plain(banner + content);

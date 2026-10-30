@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { isPresetAdmin } from "@/lib/env";
 import { publicOrigin } from "@/lib/request-origin";
 import { randomUUID } from "node:crypto";
+import { refreshEmailLogo } from "@/lib/requests/email-logo";
 import { ATTACHMENT_BUCKET, BOARD_LOGO_BUCKET, LOGO_TYPES, MAX_LOGO_BYTES } from "@/lib/requests/constants";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -196,9 +197,9 @@ export async function updateBoardAction(
 export async function deleteBoardAction(boardId: string): Promise<AdminResult> {
   return guard(async () => {
     const admin = createAdminClient();
-    const { data: board } = await admin.from("boards").select("name, logo_path, logo_light_path").eq("id", boardId).maybeSingle();
+    const { data: board } = await admin.from("boards").select("name, logo_path, logo_light_path, email_logo_path").eq("id", boardId).maybeSingle();
     if (!board) throw new Error("Board not found.");
-    const logos = [board.logo_path, board.logo_light_path].filter((p): p is string => Boolean(p));
+    const logos = [board.logo_path, board.logo_light_path, board.email_logo_path].filter((p): p is string => Boolean(p));
     if (logos.length) await admin.storage.from(BOARD_LOGO_BUCKET).remove(logos);
     const { data: files } = await admin
       .from("request_attachments")
@@ -292,6 +293,7 @@ export async function setBoardLogoAction(boardId: string, path: string | null, m
 
     const previous = board?.[column];
     if (previous && previous !== path) await admin.storage.from(BOARD_LOGO_BUCKET).remove([previous]);
+    await refreshEmailLogo(boardId).catch((e) => console.error("[logo] email PNG failed", e instanceof Error ? e.message : e));
 
     const label = mode === "light" ? "Light-mode logo" : "Dark-mode logo";
     return path ? `${label} updated.` : `${label} removed.`;
@@ -305,5 +307,6 @@ export async function setBoardLogoTintAction(boardId: string, mode: "dark" | "li
     const column = mode === "light" ? "logo_light_tint" : "logo_dark_tint";
     const { error } = await createAdminClient().from("boards").update({ [column]: color?.toLowerCase() ?? null }).eq("id", boardId);
     if (error) throw new Error(error.message);
+    await refreshEmailLogo(boardId).catch((e) => console.error("[logo] email PNG failed", e instanceof Error ? e.message : e));
   });
 }

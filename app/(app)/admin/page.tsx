@@ -4,6 +4,7 @@ import { SetupNotice } from "@/components/setup-notice";
 import { requireAdmin } from "@/lib/auth";
 import { isPresetAdmin, presetAdminEmails } from "@/lib/env";
 import { boardLogoUrl } from "@/lib/requests/constants";
+import { refreshEmailLogo } from "@/lib/requests/email-logo";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const metadata = { title: "Admin" };
@@ -33,7 +34,7 @@ async function AdminLoader() {
   const [usersResult, profilesResult, boardsResult, membersResult, requestsResult] = await Promise.all([
     admin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
     admin.from("profiles").select("id, email, full_name, role, is_active"),
-    admin.from("boards").select("id, name, slug, description, logo_path, logo_light_path, logo_dark_tint, logo_light_tint, created_at").order("name"),
+    admin.from("boards").select("id, name, slug, description, logo_path, logo_light_path, logo_dark_tint, logo_light_tint, email_logo_path, created_at").order("name"),
     admin.from("board_members").select("board_id, user_id, access"),
     admin.from("requests").select("board_id"),
   ]);
@@ -71,6 +72,13 @@ async function AdminLoader() {
   });
   users.sort((a, b) => Number(b.role === "admin") - Number(a.role === "admin") || a.email.localeCompare(b.email));
 
+  // Boards with a logo but no email PNG yet (e.g. uploaded before PNG copies existed) get one now.
+  for (const b of boardsResult.data ?? []) {
+    if (!b.email_logo_path && (b.logo_path || b.logo_light_path)) {
+      b.email_logo_path = await refreshEmailLogo(b.id).catch(() => null);
+    }
+  }
+
   const requestCounts = new Map<string, number>();
   for (const r of requestsResult.data ?? []) requestCounts.set(r.board_id, (requestCounts.get(r.board_id) ?? 0) + 1);
   const boards: AdminBoardRow[] = (boardsResult.data ?? []).map((b) => ({
@@ -82,6 +90,7 @@ async function AdminLoader() {
     logoLightUrl: boardLogoUrl(b.logo_light_path),
     logoDarkTint: b.logo_dark_tint,
     logoLightTint: b.logo_light_tint,
+    emailLogoUrl: boardLogoUrl(b.email_logo_path),
     requestCount: requestCounts.get(b.id) ?? 0,
   }));
 
