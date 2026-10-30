@@ -15,14 +15,14 @@ export function BoardLogo({
   const height = SIZES[size];
   return (
     <span
-      className={`inline-flex shrink-0 items-center justify-center rounded-lg ring-1 ${
+      className={`inline-flex max-w-full shrink-0 items-center justify-center overflow-hidden rounded-lg ring-1 ${
         board.logoBackground === "light" ? "bg-white ring-neutral-300" : "bg-ink ring-line"
       }`}
       style={{ height, padding: Math.round(height / 7) }}
     >
       <Image
         alt={`${board.name} logo`}
-        className="h-full w-auto max-w-[220px] object-contain"
+        className="h-full w-auto max-w-full object-contain"
         height={height}
         src={board.logoUrl}
         width={height * 3}
