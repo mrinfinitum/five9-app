@@ -3,9 +3,9 @@
 import { useMemo, useState } from "react";
 import type { AnalyticsData, Completion } from "@/lib/requests/analytics";
 
-type Period = "week" | "month" | "quarter" | "year" | "all";
+export type Period = "week" | "month" | "quarter" | "year" | "all";
 
-const PERIODS: { key: Period; label: string }[] = [
+export const PERIODS: { key: Period; label: string }[] = [
   { key: "week", label: "This week" },
   { key: "month", label: "This month" },
   { key: "quarter", label: "This quarter" },
@@ -15,7 +15,7 @@ const PERIODS: { key: Period; label: string }[] = [
 
 const BRAND = "#e10600";
 
-function startOfPeriod(period: Period, now: Date, completions: Completion[]) {
+export function startOfPeriod(period: Period, now: Date, completions: Completion[]) {
   const result = new Date(now);
   result.setHours(0, 0, 0, 0);
   if (period === "all") {
@@ -38,7 +38,7 @@ function localKey(date: Date) {
 }
 
 /** Buckets: days (week/month), weeks (quarter), months (year), years (all time). */
-function buildTrend(completions: Completion[], period: Period, start: Date, end: Date) {
+export function buildTrend(completions: Completion[], period: Period, start: Date, end: Date) {
   const keyFor = (date: Date) => {
     if (period === "year") return `${date.getFullYear()}-${date.getMonth()}`;
     if (period === "all") return String(date.getFullYear());
@@ -78,9 +78,9 @@ function buildTrend(completions: Completion[], period: Period, start: Date, end:
   return buckets;
 }
 
-const average = (values: number[]) => (values.length ? values.reduce((s, v) => s + v, 0) / values.length : null);
+export const average = (values: number[]) => (values.length ? values.reduce((s, v) => s + v, 0) / values.length : null);
 
-function formatDays(value: number | null) {
+export function formatDays(value: number | null) {
   if (value === null) return "—";
   if (value < 1) return "<1 day";
   return `${value.toFixed(value >= 10 ? 0 : 1)} days`;
@@ -212,7 +212,7 @@ export function BoardAnalytics({ data, boardSlug }: { data: AnalyticsData; board
   );
 }
 
-function Tile({ label, value, note }: { label: string; value: string; note: string }) {
+export function Tile({ label, value, note }: { label: string; value: string; note: string }) {
   return (
     <article className="card px-4 py-3">
       <small className="text-xs uppercase tracking-wider text-muted">{label}</small>
@@ -222,7 +222,7 @@ function Tile({ label, value, note }: { label: string; value: string; note: stri
   );
 }
 
-function Panel({ eyebrow, title, aside, children }: { eyebrow: string; title: string; aside?: string; children: React.ReactNode }) {
+export function Panel({ eyebrow, title, aside, children }: { eyebrow: string; title: string; aside?: string; children: React.ReactNode }) {
   return (
     <section className="card p-5">
       <header className="mb-4 flex items-end gap-3">
@@ -237,12 +237,12 @@ function Panel({ eyebrow, title, aside, children }: { eyebrow: string; title: st
   );
 }
 
-function Empty({ children }: { children: React.ReactNode }) {
+export function Empty({ children }: { children: React.ReactNode }) {
   return <p className="rounded-lg bg-panel-2 px-4 py-8 text-center text-sm text-muted">{children}</p>;
 }
 
 /** Horizontal ranked bars, one hue; values labelled at the end of each bar. */
-function RankedBars({ rows, unit }: { rows: { key: string; label: string; value: number; note?: string }[]; unit: string }) {
+export function RankedBars({ rows, unit }: { rows: { key: string; label: string; value: number; note?: string }[]; unit: string }) {
   const max = Math.max(1, ...rows.map((r) => r.value));
   return (
     <ol className="space-y-3">
@@ -263,7 +263,7 @@ function RankedBars({ rows, unit }: { rows: { key: string; label: string; value:
 }
 
 /** Line chart with a hover crosshair and tooltip. */
-function TrendChart({ buckets }: { buckets: { key: string; label: string; count: number }[] }) {
+export function TrendChart({ buckets }: { buckets: { key: string; label: string; count: number }[] }) {
   const [hover, setHover] = useState<number | null>(null);
   const width = 760;
   const height = 220;
