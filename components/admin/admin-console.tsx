@@ -21,6 +21,7 @@ import {
 } from "@/app/(app)/admin/actions";
 import { LogoImage } from "@/components/board-logo";
 import { ConfirmDialog, Dialog } from "@/components/ui/dialog";
+import { Select, type SelectOption } from "@/components/ui/select";
 import { BOARD_LOGO_BUCKET, LOGO_TYPES, MAX_LOGO_BYTES } from "@/lib/requests/constants";
 import { createClient } from "@/lib/supabase/client";
 
@@ -218,10 +219,12 @@ function UsersTab({
                           <Lock className="h-3 w-3" /> Preset admin
                         </span>
                       ) : (
-                        <RoleToggle
+                        <Select
+                          className="w-28"
                           disabled={pending || row.isSelf}
                           label={`Role for ${row.email}`}
                           onChange={(role) => run(() => setRoleAction(row.id, role))}
+                          options={ROLE_OPTIONS}
                           size="sm"
                           value={row.role}
                         />
@@ -320,40 +323,10 @@ function UsersTab({
   );
 }
 
-/** Member / Admin as two buttons (native dropdown menus ignore light mode on some systems). */
-function RoleToggle({
-  value,
-  onChange,
-  label,
-  disabled,
-  size = "md",
-}: {
-  value: "admin" | "member";
-  onChange: (role: "admin" | "member") => void;
-  label: string;
-  disabled?: boolean;
-  size?: "sm" | "md";
-}) {
-  return (
-    <div aria-label={label} className={`inline-flex shrink-0 rounded-md border border-line bg-ink p-0.5 ${disabled ? "opacity-60" : ""}`} role="radiogroup">
-      {(["member", "admin"] as const).map((option) => (
-        <button
-          aria-checked={value === option}
-          className={`rounded font-semibold transition ${size === "sm" ? "px-2 py-0.5 text-xs" : "px-3 py-1.5 text-sm"} ${
-            value === option ? "bg-brand text-on-brand" : "text-muted hover:text-white"
-          }`}
-          disabled={disabled}
-          key={option}
-          onClick={() => value !== option && onChange(option)}
-          role="radio"
-          type="button"
-        >
-          {option === "admin" ? "Admin" : "Member"}
-        </button>
-      ))}
-    </div>
-  );
-}
+const ROLE_OPTIONS: SelectOption<"admin" | "member">[] = [
+  { value: "member", label: "Member" },
+  { value: "admin", label: "Admin" },
+];
 
 function toggled(ids: string[], id: string, on: boolean) {
   return on ? [...new Set([...ids, id])] : ids.filter((x) => x !== id);
@@ -418,10 +391,10 @@ function InviteForm({
           setBoardIds([]);
         }}
       >
-        <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto]">
+        <div className="grid gap-2 sm:grid-cols-[1fr_1fr_9rem_auto]">
           <input aria-label="Email" className="field" onChange={(e) => setEmail(e.target.value)} placeholder="name@company.com" required type="email" value={email} />
           <input aria-label="Full name" className="field" onChange={(e) => setFullName(e.target.value)} placeholder="Full name (optional)" value={fullName} />
-          <RoleToggle label="Role" onChange={setRole} value={role} />
+          <Select className="w-full" label="Role" onChange={setRole} options={ROLE_OPTIONS} value={role} />
           <button className="btn-primary" disabled={disabled} type="submit">Send invite</button>
         </div>
         {role === "member" ? (
