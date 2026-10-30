@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Lets open tabs compare themselves with the deployed version (see VersionWatcher).
+  env: { NEXT_PUBLIC_BUILD_ID: process.env.VERCEL_GIT_COMMIT_SHA ?? "" },
   cacheComponents: true,
   partialPrefetching: true,
   turbopack: {
