@@ -7,6 +7,8 @@ import { publicOrigin } from "@/lib/request-origin";
 import { randomUUID } from "node:crypto";
 import { refreshEmailLogo } from "@/lib/requests/email-logo";
 import { ATTACHMENT_BUCKET, BOARD_LOGO_BUCKET, LOGO_TYPES, MAX_LOGO_BYTES } from "@/lib/requests/constants";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { supabasePublishableKey, supabaseUrl } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type AdminResult = { ok: true; message?: string } | { ok: false; error: string };
@@ -79,9 +81,17 @@ export async function inviteUserAction(input: {
 export async function resendInviteAction(userId: string): Promise<AdminResult> {
   return guard(async () => {
     const email = await targetEmail(userId);
-    const { error } = await createAdminClient().auth.admin.inviteUserByEmail(email, { redirectTo: await inviteRedirect() });
-    if (error) throw new Error(error.message);
-    return `Invite re-sent to ${email}.`;
+    const redirectTo = await inviteRedirect();
+    const { error } = await createAdminClient().auth.admin.inviteUserByEmail(email, { redirectTo });
+    if (!error) return `Invite re-sent to ${email}.`;
+    if (!/already/i.test(error.message)) throw new Error(error.message);
+
+    // Accounts created without an invite (e.g. by the monday.com import) can't be
+    // re-invited; send a "set your password" link instead, which works the same way.
+    const publicClient = createSupabaseClient(supabaseUrl(), supabasePublishableKey(), { auth: { persistSession: false } });
+    const { error: resetError } = await publicClient.auth.resetPasswordForEmail(email, { redirectTo });
+    if (resetError) throw new Error(resetError.message);
+    return `Sign-in link sent to ${email} — they'll set a password and land on their boards.`;
   });
 }
 

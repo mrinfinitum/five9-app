@@ -91,3 +91,10 @@ lib/auth.ts          current user + admin checks (preset admins from ADMIN_EMAIL
 proxy.ts             refreshes the Supabase session, redirects signed-out visitors
 supabase/migrations  database schema + row-level security
 ```
+
+## Importing from monday.com
+
+`npm run import-monday` shows what would be imported; `npm run import-monday -- --apply` imports it.
+It reads `MONDAY_API_TOKEN` from `.env.local`, maps each monday.com workspace to a board and each
+sub-board (Projects, Edits, Reels, …) to a request type, and copies items, assignees, due dates,
+updates (as conversation), and files. It's safe to re-run: anything already imported is skipped.
