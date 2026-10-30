@@ -15,7 +15,7 @@ export function teamNotificationEmails() {
 }
 
 function fromAddress() {
-  return process.env.EMAIL_FROM || "Five9 Media <notifications@five9.media>";
+  return process.env.EMAIL_FROM || "Five9 Media <notifications@send.five9.media>";
 }
 
 /** True when Resend or SMTP is set up, so the app can deliver email itself. */
