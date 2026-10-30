@@ -3,6 +3,7 @@ import { AdminConsole, type AdminBoardRow, type AdminUserRow } from "@/component
 import { SetupNotice } from "@/components/setup-notice";
 import { requireAdmin } from "@/lib/auth";
 import { isPresetAdmin, presetAdminEmails } from "@/lib/env";
+import { boardLogoUrl } from "@/lib/requests/constants";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const metadata = { title: "Admin" };
@@ -32,7 +33,7 @@ async function AdminLoader() {
   const [usersResult, profilesResult, boardsResult, membersResult, requestsResult] = await Promise.all([
     admin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
     admin.from("profiles").select("id, email, full_name, role, is_active"),
-    admin.from("boards").select("id, name, slug, description, created_at").order("name"),
+    admin.from("boards").select("id, name, slug, description, logo_path, logo_background, created_at").order("name"),
     admin.from("board_members").select("board_id, user_id, access"),
     admin.from("requests").select("board_id"),
   ]);
@@ -77,6 +78,8 @@ async function AdminLoader() {
     name: b.name,
     slug: b.slug,
     description: b.description,
+    logoUrl: boardLogoUrl(b.logo_path),
+    logoBackground: b.logo_background === "light" ? "light" : "dark",
     requestCount: requestCounts.get(b.id) ?? 0,
   }));
 

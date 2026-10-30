@@ -57,3 +57,14 @@ export function isClockRunning(status: string) {
 export function requestCode(number: number) {
   return `F9-${number}`;
 }
+
+export const BOARD_LOGO_BUCKET = "board-logos";
+export const MAX_LOGO_BYTES = 2 * 1024 * 1024;
+export const LOGO_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"] as const;
+
+/** Public URL for a file in the board-logos bucket. */
+export function boardLogoUrl(path: string | null | undefined) {
+  if (!path) return null;
+  const base = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\/$/, "");
+  return `${base}/storage/v1/object/public/${BOARD_LOGO_BUCKET}/${path.split("/").map(encodeURIComponent).join("/")}`;
+}

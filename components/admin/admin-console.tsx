@@ -1,10 +1,12 @@
 "use client";
 
-import { ExternalLink, KanbanSquare, Lock, MailPlus, Plus, RotateCw, ShieldCheck, Trash2, UserRound, Users } from "lucide-react";
+import { ExternalLink, ImagePlus, KanbanSquare, Lock, MailPlus, Plus, RotateCw, ShieldCheck, Trash2, UserRound, Users } from "lucide-react";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import {
   createBoardAction,
+  createBoardLogoUploadAction,
+  setBoardLogoAction,
   deleteBoardAction,
   deleteUserAction,
   inviteUserAction,
@@ -17,7 +19,10 @@ import {
   type AdminResult,
   type BoardGrant,
 } from "@/app/(app)/admin/actions";
+import { BoardLogo } from "@/components/board-logo";
 import { ConfirmDialog, Dialog } from "@/components/ui/dialog";
+import { BOARD_LOGO_BUCKET, LOGO_TYPES, MAX_LOGO_BYTES } from "@/lib/requests/constants";
+import { createClient } from "@/lib/supabase/client";
 
 type Access = "team" | "requester";
 
@@ -35,7 +40,15 @@ export type AdminUserRow = {
   access: Record<string, Access>;
 };
 
-export type AdminBoardRow = { id: string; name: string; slug: string; description: string | null; requestCount: number };
+export type AdminBoardRow = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  logoUrl: string | null;
+  logoBackground: "dark" | "light";
+  requestCount: number;
+};
 
 const ACCESS_LABEL: Record<Access | "none", string> = { none: "No access", team: "Team", requester: "Requester" };
 
@@ -448,7 +461,8 @@ function BoardsTab({ boards, users, pending, run }: { boards: AdminBoardRow[]; u
             const requesters = members.filter((u) => accessOf(u, board.id) === "requester").length;
             return (
               <article className="card p-4" key={board.id}>
-                <div className="flex flex-wrap items-start gap-3">
+                <div className="flex flex-wrap items-start gap-4">
+                  <LogoEditor board={board} disabled={pending} run={run} />
                   <div className="min-w-0 flex-1 space-y-1">
                     <input
                       aria-label="Board name"
@@ -580,4 +594,79 @@ function Badge({ tone, children }: { tone: "green" | "amber" | "muted"; children
     muted: "bg-panel-2 text-muted ring-line",
   } as const;
   return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${styles[tone]}`}>{children}</span>;
+}
+
+function LogoEditor({ board, disabled, run }: { board: AdminBoardRow; disabled: boolean; run: Run }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function upload(file: File | undefined) {
+    if (!file) return;
+    setError(null);
+    if (!(LOGO_TYPES as readonly string[]).includes(file.type)) return setError("Use a PNG, JPG, WebP, or GIF.");
+    if (file.size > MAX_LOGO_BYTES) return setError("Logos can be up to 2 MB.");
+    setBusy(true);
+    try {
+      const target = await createBoardLogoUploadAction(board.id, file.type, file.size);
+      if (!target.ok) throw new Error(target.error);
+      const { error: uploadError } = await createClient()
+        .storage.from(BOARD_LOGO_BUCKET)
+        .uploadToSignedUrl(target.path, target.token, file, { contentType: file.type });
+      if (uploadError) throw new Error(uploadError.message);
+      run(() => setBoardLogoAction(board.id, target.path));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="w-44 shrink-0 space-y-2">
+      {board.logoUrl ? (
+        <BoardLogo board={board} size="lg" />
+      ) : (
+        <span className="grid h-20 w-full place-items-center rounded-lg border border-dashed border-line text-xs text-muted">No logo</span>
+      )}
+      <div className="flex flex-wrap gap-1.5">
+        <label className={`btn-ghost cursor-pointer px-2 py-1 text-xs ${busy || disabled ? "pointer-events-none opacity-60" : ""}`}>
+          <ImagePlus className="h-3.5 w-3.5" /> {busy ? "Uploading…" : board.logoUrl ? "Replace" : "Upload logo"}
+          <input
+            accept={LOGO_TYPES.join(",")}
+            className="hidden"
+            onChange={(e) => {
+              void upload(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+            type="file"
+          />
+        </label>
+        {board.logoUrl ? (
+          <button className="btn-ghost px-2 py-1 text-xs" disabled={disabled} onClick={() => run(() => setBoardLogoAction(board.id, null))} type="button">
+            Remove
+          </button>
+        ) : null}
+      </div>
+      {board.logoUrl ? (
+        <div className="flex items-center gap-1 text-xs text-muted" role="group" aria-label="Logo background">
+          Background:
+          {(["dark", "light"] as const).map((bg) => (
+            <button
+              aria-pressed={board.logoBackground === bg}
+              className={`rounded px-1.5 py-0.5 ${board.logoBackground === bg ? "bg-brand text-white" : "hover:text-white"}`}
+              disabled={disabled}
+              key={bg}
+              onClick={() => run(() => updateBoardAction(board.id, { logoBackground: bg }), "Logo background updated.")}
+              type="button"
+            >
+              {bg === "dark" ? "Dark" : "Light"}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="text-[0.7rem] text-muted">PNG, JPG, WebP or GIF · up to 2 MB</p>
+      )}
+      {error ? <p className="text-xs text-red-300" role="alert">{error}</p> : null}
+    </div>
+  );
 }

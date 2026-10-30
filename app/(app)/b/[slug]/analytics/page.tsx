@@ -2,6 +2,7 @@ import { ArrowLeft, ChartNoAxesCombined, Smile } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { BoardLogo } from "@/components/board-logo";
 import { BoardAnalytics } from "@/components/requests/analytics";
 import { requireUser } from "@/lib/auth";
 import { getBoardAnalytics } from "@/lib/requests/analytics";
@@ -39,6 +40,7 @@ async function AnalyticsLoader({ params }: { params: Promise<{ slug: string }> }
         <ArrowLeft className="h-4 w-4" /> Back to {board.name}
       </Link>
       <header className="mb-6 flex flex-wrap items-end gap-4">
+        <BoardLogo board={board} size="lg" />
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.25em] text-brand">
             <ChartNoAxesCombined className="h-3.5 w-3.5" /> Request intelligence

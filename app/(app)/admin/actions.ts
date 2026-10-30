@@ -4,7 +4,8 @@ import { refresh } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
 import { isPresetAdmin } from "@/lib/env";
 import { publicOrigin } from "@/lib/request-origin";
-import { ATTACHMENT_BUCKET } from "@/lib/requests/constants";
+import { randomUUID } from "node:crypto";
+import { ATTACHMENT_BUCKET, BOARD_LOGO_BUCKET, LOGO_TYPES, MAX_LOGO_BYTES } from "@/lib/requests/constants";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type AdminResult = { ok: true; message?: string } | { ok: false; error: string };
@@ -174,7 +175,10 @@ export async function createBoardAction(input: { name: string; description?: str
   });
 }
 
-export async function updateBoardAction(boardId: string, input: { name?: string; description?: string }): Promise<AdminResult> {
+export async function updateBoardAction(
+  boardId: string,
+  input: { name?: string; description?: string; logoBackground?: "dark" | "light" },
+): Promise<AdminResult> {
   return guard(async () => {
     const update: Record<string, string | null> = {};
     if (input.name !== undefined) {
@@ -183,6 +187,7 @@ export async function updateBoardAction(boardId: string, input: { name?: string;
       update.name = name;
     }
     if (input.description !== undefined) update.description = input.description.trim().slice(0, 300) || null;
+    if (input.logoBackground !== undefined) update.logo_background = input.logoBackground === "light" ? "light" : "dark";
     const { error } = await createAdminClient().from("boards").update(update).eq("id", boardId);
     if (error) throw new Error(error.message);
   });
@@ -192,8 +197,9 @@ export async function updateBoardAction(boardId: string, input: { name?: string;
 export async function deleteBoardAction(boardId: string): Promise<AdminResult> {
   return guard(async () => {
     const admin = createAdminClient();
-    const { data: board } = await admin.from("boards").select("name").eq("id", boardId).maybeSingle();
+    const { data: board } = await admin.from("boards").select("name, logo_path").eq("id", boardId).maybeSingle();
     if (!board) throw new Error("Board not found.");
+    if (board.logo_path) await admin.storage.from(BOARD_LOGO_BUCKET).remove([board.logo_path]);
     const { data: files } = await admin
       .from("request_attachments")
       .select("storage_path, requests!inner(board_id)")
@@ -205,5 +211,57 @@ export async function deleteBoardAction(boardId: string): Promise<AdminResult> {
       await admin.storage.from(ATTACHMENT_BUCKET).remove(paths.slice(i, i + 100));
     }
     return `Board “${board.name}” was deleted.`;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Board logos
+// ---------------------------------------------------------------------------
+
+async function ensureLogoBucket() {
+  const storage = createAdminClient().storage;
+  const { data } = await storage.getBucket(BOARD_LOGO_BUCKET);
+  if (!data) {
+    const { error } = await storage.createBucket(BOARD_LOGO_BUCKET, {
+      public: true,
+      fileSizeLimit: MAX_LOGO_BYTES,
+      allowedMimeTypes: [...LOGO_TYPES],
+    });
+    if (error && !/already exists/i.test(error.message)) throw new Error(error.message);
+  }
+}
+
+/** One-time upload URL for a board logo (PNG, JPG, WebP, or GIF up to 2 MB). */
+export async function createBoardLogoUploadAction(
+  boardId: string,
+  contentType: string,
+  size: number,
+): Promise<{ ok: true; path: string; token: string } | { ok: false; error: string }> {
+  try {
+    const actor = await getCurrentUser();
+    if (!actor?.isAdmin) throw new Error("Admins only.");
+    if (!(LOGO_TYPES as readonly string[]).includes(contentType)) throw new Error("Use a PNG, JPG, WebP, or GIF image.");
+    if (size > MAX_LOGO_BYTES) throw new Error("Logos can be up to 2 MB.");
+    await ensureLogoBucket();
+    const ext = contentType === "image/jpeg" ? "jpg" : contentType.split("/")[1];
+    const path = `${boardId}/${randomUUID()}.${ext}`;
+    const { data, error } = await createAdminClient().storage.from(BOARD_LOGO_BUCKET).createSignedUploadUrl(path);
+    if (error || !data) throw new Error(error?.message ?? "Couldn't start the upload.");
+    return { ok: true, path, token: data.token };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Something went wrong." };
+  }
+}
+
+/** Saves an uploaded logo on the board (or clears it with null) and deletes the old file. */
+export async function setBoardLogoAction(boardId: string, path: string | null): Promise<AdminResult> {
+  return guard(async () => {
+    if (path && !path.startsWith(`${boardId}/`)) throw new Error("That file doesn't belong to this board.");
+    const admin = createAdminClient();
+    const { data: board } = await admin.from("boards").select("logo_path").eq("id", boardId).maybeSingle();
+    const { error } = await admin.from("boards").update({ logo_path: path }).eq("id", boardId);
+    if (error) throw new Error(error.message);
+    if (board?.logo_path && board.logo_path !== path) await admin.storage.from(BOARD_LOGO_BUCKET).remove([board.logo_path]);
+    return path ? "Logo updated." : "Logo removed.";
   });
 }

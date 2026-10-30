@@ -11,7 +11,16 @@ export type Person = {
 
 export type BoardAccess = "team" | "requester";
 
-export type Board = { id: string; name: string; slug: string; description: string | null };
+export type Board = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  /** Public URL of the board's logo, if one was uploaded. */
+  logoUrl: string | null;
+  /** Backdrop the logo is shown on, so dark or light logos both stay visible. */
+  logoBackground: "dark" | "light";
+};
 
 export type RequestType = { key: string; name: string };
 

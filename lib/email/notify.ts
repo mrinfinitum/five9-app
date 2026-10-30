@@ -1,6 +1,6 @@
 import "server-only";
 import { after } from "next/server";
-import { requestCode, statusName } from "@/lib/requests/constants";
+import { boardLogoUrl, requestCode, statusName } from "@/lib/requests/constants";
 import { SATISFACTION_FACES, createSurvey } from "@/lib/requests/survey";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail, teamNotificationEmails } from "./send";
@@ -49,11 +49,11 @@ export function notify(event: RequestEvent, origin: string) {
 }
 
 async function deliver(event: RequestEvent, origin: string) {
-  const layout = (content: string) => baseLayout(content, origin);
+  let layout = (content: string) => baseLayout(content, origin);
   const admin = createAdminClient();
   const { data: request } = await admin
     .from("requests")
-    .select("id, board_id, number, title, status, requester_id, description, boards(slug, name)")
+    .select("id, board_id, number, title, status, requester_id, description, boards(slug, name, logo_path, logo_background)")
     .eq("id", event.requestId)
     .maybeSingle();
   if (!request) return;
@@ -75,7 +75,20 @@ async function deliver(event: RequestEvent, origin: string) {
     .maybeSingle();
   // The board team (admins + team members) vs. the person who asked.
   const actorIsTeam = actor?.role === "admin" || actorMembership?.access === "team";
-  const board = (Array.isArray(request.boards) ? request.boards[0] : request.boards) as { slug: string; name: string } | null;
+  const board = (Array.isArray(request.boards) ? request.boards[0] : request.boards) as {
+    slug: string;
+    name: string;
+    logo_path: string | null;
+    logo_background: string;
+  } | null;
+  // Show the board's logo at the top of its emails, on the tile colour chosen in Admin.
+  const logoUrl = boardLogoUrl(board?.logo_path);
+  if (logoUrl) {
+    const tile = board?.logo_background === "light" ? "#ffffff;border:1px solid #e5e5e5" : "#0a0a0a";
+    const banner = `<div style="margin:0 0 18px"><span style="display:inline-block;padding:8px 12px;border-radius:8px;background:${tile}"><img src="${escapeHtml(logoUrl)}" alt="${escapeHtml(board?.name ?? "")}" height="40" style="display:block;height:40px;width:auto;border:0" /></span></div>`;
+    const plain = layout;
+    layout = (content: string) => plain(banner + content);
+  }
   const boardPath = `/b/${encodeURIComponent(board?.slug ?? "")}`;
   const requester = request.requester_id ? byId.get(request.requester_id) : undefined;
   const actorEmail = actor?.email.toLowerCase() ?? null;

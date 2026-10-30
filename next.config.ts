@@ -12,6 +12,10 @@ const nextConfig: NextConfig = {
       },
     },
   },
+  images: {
+    // Board logos are served from Supabase Storage.
+    remotePatterns: [{ protocol: "https", hostname: "*.supabase.co", pathname: "/storage/v1/object/public/**" }],
+  },
   async redirects() {
     return [{ source: "/", destination: "/boards", permanent: false }];
   },

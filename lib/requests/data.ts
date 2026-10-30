@@ -1,6 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import { requestCode } from "./constants";
+import { boardLogoUrl, requestCode } from "./constants";
 import type { Board, BoardAccess, Person, RequestItem, RequestType } from "./types";
 
 type Row = Record<string, unknown>;
@@ -104,7 +104,20 @@ export async function listRequestTypes(): Promise<RequestType[]> {
   return data ?? [];
 }
 
-const BOARD_SELECT = "id, name, slug, description";
+const BOARD_SELECT = "id, name, slug, description, logo_path, logo_background";
+
+type BoardRow = { id: string; name: string; slug: string; description: string | null; logo_path: string | null; logo_background: string };
+
+export function mapBoard(row: BoardRow): Board {
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    description: row.description,
+    logoUrl: boardLogoUrl(row.logo_path),
+    logoBackground: row.logo_background === "light" ? "light" : "dark",
+  };
+}
 
 /** Boards the signed-in user can open, with their access level on each. */
 export async function listMyBoards(userId: string, isAdmin: boolean): Promise<(Board & { access: BoardAccess })[]> {
@@ -117,7 +130,7 @@ export async function listMyBoards(userId: string, isAdmin: boolean): Promise<(B
   check(membershipError);
   const accessByBoard = new Map((memberships ?? []).map((m) => [m.board_id, m.access as BoardAccess]));
   return (boards ?? []).map((board) => ({
-    ...board,
+    ...mapBoard(board),
     access: isAdmin ? "team" : (accessByBoard.get(board.id) ?? "requester"),
   }));
 }
@@ -131,7 +144,7 @@ export async function getBoardContext(slug: string): Promise<{ board: Board; acc
   const { data: access, error: accessError } = await supabase.rpc("board_access", { target_board: board.id });
   check(accessError);
   if (access !== "team" && access !== "requester") return null;
-  return { board, access };
+  return { board: mapBoard(board), access };
 }
 
 /** People who can work a board: admins plus the board's team members. */

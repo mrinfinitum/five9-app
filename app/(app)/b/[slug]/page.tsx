@@ -2,6 +2,7 @@ import { ChartNoAxesCombined, KanbanSquare, Megaphone } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { BoardLogo } from "@/components/board-logo";
 import { RequestBoard } from "@/components/requests/board";
 import { RequesterPortal } from "@/components/requests/portal";
 import { SetupNotice } from "@/components/setup-notice";
@@ -47,6 +48,11 @@ async function BoardLoader({ params }: { params: Promise<{ slug: string }> }) {
     return (
       <>
         <header className="mb-6">
+          {board.logoUrl ? (
+            <div className="mb-4">
+              <BoardLogo board={board} size="lg" />
+            </div>
+          ) : null}
           <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.25em] text-brand">
             <Megaphone className="h-3.5 w-3.5" /> {board.name}
           </p>
@@ -67,6 +73,7 @@ async function BoardLoader({ params }: { params: Promise<{ slug: string }> }) {
   return (
     <>
       <header className="mb-4 flex flex-wrap items-end gap-4">
+        <BoardLogo board={board} size="lg" />
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.25em] text-brand">
             <KanbanSquare className="h-3.5 w-3.5" /> {board.name}
