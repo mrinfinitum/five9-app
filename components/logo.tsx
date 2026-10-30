@@ -1,6 +1,6 @@
 import Image from "next/image";
 
-/** The Five9 Media wordmark (white "five9", from five9.media). */
+/** The Five9 Media wordmark from five9.media: white "five", red "9". */
 export function Logo({ size = "md" }: { size?: "md" | "lg" }) {
   const height = size === "lg" ? 64 : 30;
   return (
