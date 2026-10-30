@@ -71,6 +71,9 @@ const SORT_HEADERS: { key: SortKey; label: string }[] = [
   { key: "created", label: "Submitted" },
 ];
 
+/** Table columns whose headers and values are centered (short values: chips, dates, avatars). */
+const CENTERED: ReadonlySet<SortKey> = new Set(["type", "status", "priority", "due", "created"]);
+
 const conversationCount = (request: RequestItem) => request.comments.filter((c) => c.kind === "comment").length;
 
 type Props = {
@@ -746,15 +749,15 @@ export function RequestBoard({ board, requests, team, people, requesterOptions, 
                           <tr>
                             <th aria-label="Drag handle" className="w-8" />
                             {SORT_HEADERS.map((h) => (
-                              <th className="px-3 py-2 font-semibold" key={h.key}>
+                              <th className={`px-3 py-2 font-semibold ${CENTERED.has(h.key) ? "text-center" : ""}`} key={h.key}>
                                 <button className="inline-flex items-center gap-1 uppercase hover:text-white" onClick={() => toggleSort(h.key)} type="button">
                                   {h.label}
                                   {sortKey === h.key ? sortAsc ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" /> : null}
                                 </button>
                               </th>
                             ))}
-                            <th className="px-3 py-2 font-semibold">Assignee</th>
-                            <th className="px-3 py-2 font-semibold">File</th>
+                            <th className="px-3 py-2 text-center font-semibold">Assignee</th>
+                            <th className="px-3 py-2 text-center font-semibold">File</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -791,13 +794,13 @@ export function RequestBoard({ board, requests, team, people, requesterOptions, 
                                     </div>
                                   </td>
                                   <td className="max-w-40 px-3 py-2">{requesterLink(request.requesterId)}</td>
-                                  <td className="px-3 py-2">{fieldChip(request, "type")}</td>
-                                  <td className="px-3 py-2">{fieldChip(request, "status")}</td>
-                                  <td className="px-3 py-2">{fieldChip(request, "priority")}</td>
-                                  <td className="px-3 py-2">
+                                  <td className="px-3 py-2 text-center">{fieldChip(request, "type")}</td>
+                                  <td className="px-3 py-2 text-center">{fieldChip(request, "status")}</td>
+                                  <td className="px-3 py-2 text-center">{fieldChip(request, "priority")}</td>
+                                  <td className="px-3 py-2 text-center">
                                     <input
                                       aria-label={`Due date for ${request.code}`}
-                                      className={`rounded border border-transparent bg-transparent px-1 py-0.5 text-xs hover:border-line focus:border-brand focus:outline-none [&:not(:focus):invalid]:text-transparent ${due ? DUE_TEXT[due] : "text-neutral-300"}`}
+                                      className={`w-[8.5rem] rounded border text-center border-transparent bg-transparent px-1 py-0.5 text-xs hover:border-line focus:border-brand focus:outline-none [&:not(:focus):invalid]:text-transparent ${due ? DUE_TEXT[due] : "text-neutral-300"}`}
                                       defaultValue={request.dueDate ?? ""}
                                       key={`${request.id}-${request.dueDate ?? "none"}`}
                                       required /* lets an empty date be styled blank instead of "mm/dd/yyyy" */
@@ -809,9 +812,9 @@ export function RequestBoard({ board, requests, team, people, requesterOptions, 
                                       type="date"
                                     />
                                   </td>
-                                  <td className="px-3 py-2 text-xs text-muted">{formatDate(request.createdAt.slice(0, 10))}</td>
-                                  <td className="px-3 py-2">{assigneeButton(request, 3)}</td>
-                                  <td className="px-3 py-2">
+                                  <td className="px-3 py-2 text-center text-xs text-muted">{formatDate(request.createdAt.slice(0, 10))}</td>
+                                  <td className="px-3 py-2 text-center">{assigneeButton(request, 3)}</td>
+                                  <td className="px-3 py-2 text-center">
                                     {request.attachments.length ? (
                                       <button
                                         aria-label={`View ${request.attachments.length} attachment${request.attachments.length === 1 ? "" : "s"} on ${request.code}`}
@@ -858,7 +861,7 @@ export function RequestBoard({ board, requests, team, people, requesterOptions, 
                 <thead className="text-xs uppercase tracking-wider text-muted">
                   <tr>
                     {SORT_HEADERS.map((h) => (
-                      <th className="px-3 py-2 font-semibold" key={h.key}>
+                      <th className={`px-3 py-2 font-semibold ${CENTERED.has(h.key) ? "text-center" : ""}`} key={h.key}>
                         <button className="inline-flex items-center gap-1 uppercase hover:text-white" onClick={() => toggleSort(h.key)} type="button">
                           {h.label}
                           {sortKey === h.key ? sortAsc ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" /> : null}
@@ -878,17 +881,17 @@ export function RequestBoard({ board, requests, team, people, requesterOptions, 
                         <button className="truncate text-left font-semibold text-white hover:underline" onClick={() => setSelectedId(request.id)} title={request.title} type="button">{request.title}</button>
                       </td>
                       <td className="px-3 py-2">{requesterLink(request.requesterId)}</td>
-                      <td className="px-3 py-2 text-neutral-300">{typeName(request.requestType) ?? "—"}</td>
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2 text-center text-neutral-300">{typeName(request.requestType) ?? "—"}</td>
+                      <td className="px-3 py-2 text-center">
                         <span className={`rounded-md px-2 py-0.5 text-[0.7rem] font-semibold ${STATUS_CHIP[request.status]}`}>{statusName(request.status)}</span>
                       </td>
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2 text-center">
                         <span className={`rounded-md px-2 py-0.5 text-[0.7rem] font-semibold ${PRIORITY_CHIP[request.priority]}`}>
                           <PriorityLabel name={priorityName(request.priority)} priority={request.priority} />
                         </span>
                       </td>
-                      <td className="px-3 py-2 text-xs text-muted">{formatDate(request.dueDate) || "—"}</td>
-                      <td className="px-3 py-2 text-xs text-muted">{formatDate(request.createdAt.slice(0, 10))}</td>
+                      <td className="px-3 py-2 text-center text-xs text-muted">{formatDate(request.dueDate) || "—"}</td>
+                      <td className="px-3 py-2 text-center text-xs text-muted">{formatDate(request.createdAt.slice(0, 10))}</td>
                       <td className="px-3 py-2 text-right">
                         <button className="btn-ghost px-2.5 py-1 text-xs" onClick={() => setArchived(request.id, false)} title={`Restore ${request.code} to the board`} type="button">
                           <ArchiveRestore className="h-3.5 w-3.5" /> Restore

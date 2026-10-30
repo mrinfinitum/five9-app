@@ -404,6 +404,10 @@ function InviteForm({
           boards.length ? (
             <div>
               <span className="label">Board access</span>
+              <p className="mb-2 text-xs text-muted">
+                <strong className="text-neutral-300">Team</strong> works the board: sees every request, moves cards, assigns, posts
+                internal notes. <strong className="text-neutral-300">Requester</strong> only submits requests and follows their own.
+              </p>
               <div className="grid gap-2 sm:grid-cols-2">
                 {boards.map((board) => (
                   <label className="flex items-center gap-3 rounded-lg bg-panel-2 px-3 py-2" key={board.id}>
