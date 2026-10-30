@@ -8,7 +8,7 @@ A multi-board request pipeline modelled on the Sales Hub marketing request pipel
 - **Boards** — admins create as many boards as they need (e.g. one per client or team). Each user is given
   access per board as **Team** (works the board) or **Requester** (submits requests and follows their own).
   Admins see every board.
-- **Team board** (`/b/<board>`) — Board, Table, and Archive views; Inbox → On Hold → In Progress → Creative Review
+- **Team board** (`/b/<board>`) — Board, Table, and Archive views; Not Started → On Hold → In Progress → In Review
   → Completed (→ Cancelled). Drag cards between columns, quick-edit type/priority/status/assignees from the card,
   right-click menu (open, move to, archive, delete), search and filters ("My tickets", assignee, priority, type),
   sortable table columns, collapsible groups, overdue/due-soon highlighting (On Hold pauses the clock),

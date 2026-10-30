@@ -78,7 +78,7 @@ export async function submitRequestAction(input: SubmitRequestInput): Promise<Ac
     const { data: canWork } = await supabase.rpc("can_work_board", { target_board: input.boardId });
     const requesterId = canWork && input.requesterId ? input.requesterId : user.id;
 
-    // New requests land at the top of the Inbox.
+    // New requests land at the top of Not Started.
     const { data: first } = await supabase
       .from("requests")
       .select("sort_order")

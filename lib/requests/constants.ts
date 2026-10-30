@@ -1,8 +1,8 @@
 export const REQUEST_STATUSES = [
-  { key: "new", name: "Inbox" },
+  { key: "new", name: "Not Started" },
   { key: "waiting", name: "On Hold" },
   { key: "in_progress", name: "In Progress" },
-  { key: "creative_review", name: "Creative Review" },
+  { key: "creative_review", name: "In Review" },
   { key: "completed", name: "Completed" },
   { key: "cancelled", name: "Cancelled" },
 ] as const;
