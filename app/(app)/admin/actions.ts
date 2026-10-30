@@ -4,6 +4,7 @@ import { refresh } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
 import { isPresetAdmin } from "@/lib/env";
 import { publicOrigin } from "@/lib/request-origin";
+import { ATTACHMENT_BUCKET } from "@/lib/requests/constants";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type AdminResult = { ok: true; message?: string } | { ok: false; error: string };
@@ -33,7 +34,14 @@ async function inviteRedirect() {
   return `${await publicOrigin()}/auth/callback?next=/account/set-password`;
 }
 
-export async function inviteUserAction(input: { email: string; fullName?: string; role?: string }): Promise<AdminResult> {
+export type BoardGrant = { boardId: string; access: "team" | "requester" };
+
+export async function inviteUserAction(input: {
+  email: string;
+  fullName?: string;
+  role?: string;
+  boards?: BoardGrant[];
+}): Promise<AdminResult> {
   return guard(async () => {
     const email = input.email.trim().toLowerCase();
     if (!EMAIL_RE.test(email)) throw new Error("Enter a valid email address.");
@@ -54,6 +62,14 @@ export async function inviteUserAction(input: { email: string; fullName?: string
       .from("profiles")
       .upsert({ id: data.user.id, email, full_name: fullName ?? null, role, is_active: true }, { onConflict: "id" });
     if (profileError) throw new Error(profileError.message);
+
+    const grants = (input.boards ?? []).filter((g) => g.access === "team" || g.access === "requester");
+    if (grants.length) {
+      const { error: accessError } = await admin
+        .from("board_members")
+        .upsert(grants.map((g) => ({ board_id: g.boardId, user_id: data.user.id, access: g.access })));
+      if (accessError) throw new Error(accessError.message);
+    }
     return `Invite sent to ${email}.`;
   });
 }
@@ -107,5 +123,87 @@ export async function deleteUserAction(userId: string): Promise<AdminResult> {
     const { error } = await createAdminClient().auth.admin.deleteUser(userId);
     if (error) throw new Error(error.message);
     return `${email} was removed.`;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Board access
+// ---------------------------------------------------------------------------
+
+/** Gives a user team/requester access to a board, or removes it (access = null). */
+export async function setBoardAccessAction(boardId: string, userId: string, access: "team" | "requester" | null): Promise<AdminResult> {
+  return guard(async () => {
+    const admin = createAdminClient();
+    const { error } = access
+      ? await admin.from("board_members").upsert({ board_id: boardId, user_id: userId, access })
+      : await admin.from("board_members").delete().eq("board_id", boardId).eq("user_id", userId);
+    if (error) throw new Error(error.message);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Boards
+// ---------------------------------------------------------------------------
+
+function slugify(name: string) {
+  return (
+    name
+      .toLowerCase()
+      .replace(/&/g, "and")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 50) || "board"
+  );
+}
+
+export async function createBoardAction(input: { name: string; description?: string }): Promise<AdminResult> {
+  return guard(async () => {
+    const name = input.name.trim().slice(0, 80);
+    if (name.length < 2) throw new Error("Board names need at least 2 characters.");
+    const admin = createAdminClient();
+    const base = slugify(name).padEnd(2, "0");
+    const { data: taken } = await admin.from("boards").select("slug").like("slug", `${base}%`);
+    const used = new Set((taken ?? []).map((b) => b.slug));
+    let slug = base;
+    for (let n = 2; used.has(slug); n += 1) slug = `${base}-${n}`;
+    const { error } = await admin
+      .from("boards")
+      .insert({ name, slug, description: input.description?.trim().slice(0, 300) || null });
+    if (error) throw new Error(error.message);
+    return `Board “${name}” created.`;
+  });
+}
+
+export async function updateBoardAction(boardId: string, input: { name?: string; description?: string }): Promise<AdminResult> {
+  return guard(async () => {
+    const update: Record<string, string | null> = {};
+    if (input.name !== undefined) {
+      const name = input.name.trim().slice(0, 80);
+      if (name.length < 2) throw new Error("Board names need at least 2 characters.");
+      update.name = name;
+    }
+    if (input.description !== undefined) update.description = input.description.trim().slice(0, 300) || null;
+    const { error } = await createAdminClient().from("boards").update(update).eq("id", boardId);
+    if (error) throw new Error(error.message);
+  });
+}
+
+/** Deletes a board with all of its requests, conversations, and files. */
+export async function deleteBoardAction(boardId: string): Promise<AdminResult> {
+  return guard(async () => {
+    const admin = createAdminClient();
+    const { data: board } = await admin.from("boards").select("name").eq("id", boardId).maybeSingle();
+    if (!board) throw new Error("Board not found.");
+    const { data: files } = await admin
+      .from("request_attachments")
+      .select("storage_path, requests!inner(board_id)")
+      .eq("requests.board_id", boardId);
+    const { error } = await admin.from("boards").delete().eq("id", boardId);
+    if (error) throw new Error(error.message);
+    const paths = (files ?? []).map((f) => f.storage_path);
+    for (let i = 0; i < paths.length; i += 100) {
+      await admin.storage.from(ATTACHMENT_BUCKET).remove(paths.slice(i, i + 100));
+    }
+    return `Board “${board.name}” was deleted.`;
   });
 }

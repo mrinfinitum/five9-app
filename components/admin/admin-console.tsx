@@ -1,0 +1,583 @@
+"use client";
+
+import { ExternalLink, KanbanSquare, Lock, MailPlus, Plus, RotateCw, ShieldCheck, Trash2, UserRound, Users } from "lucide-react";
+import Link from "next/link";
+import { useState, useTransition } from "react";
+import {
+  createBoardAction,
+  deleteBoardAction,
+  deleteUserAction,
+  inviteUserAction,
+  renameUserAction,
+  resendInviteAction,
+  setActiveAction,
+  setBoardAccessAction,
+  setRoleAction,
+  updateBoardAction,
+  type AdminResult,
+  type BoardGrant,
+} from "@/app/(app)/admin/actions";
+import { ConfirmDialog, Dialog } from "@/components/ui/dialog";
+
+type Access = "team" | "requester";
+
+export type AdminUserRow = {
+  id: string;
+  email: string;
+  name: string | null;
+  role: "admin" | "member";
+  isActive: boolean;
+  isPreset: boolean;
+  isSelf: boolean;
+  invitedPending: boolean;
+  lastSignInAt: string | null;
+  /** boardId → access */
+  access: Record<string, Access>;
+};
+
+export type AdminBoardRow = { id: string; name: string; slug: string; description: string | null; requestCount: number };
+
+const ACCESS_LABEL: Record<Access | "none", string> = { none: "No access", team: "Team", requester: "Requester" };
+
+function formatWhen(value: string | null) {
+  if (!value) return "Never";
+  return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+export function AdminConsole({ users, boards, missingPresets }: { users: AdminUserRow[]; boards: AdminBoardRow[]; missingPresets: string[] }) {
+  const [tab, setTab] = useState<"users" | "boards">("users");
+  const [pending, startTransition] = useTransition();
+  const [notice, setNotice] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+
+  function run(action: () => Promise<AdminResult>, success?: string) {
+    setNotice(null);
+    startTransition(async () => {
+      const result = await action();
+      if (!result.ok) setNotice({ tone: "error", text: result.error });
+      else if (result.message || success) setNotice({ tone: "ok", text: result.message ?? success! });
+    });
+  }
+
+  const activeMembers = users.filter((u) => u.isActive && !u.invitedPending).length;
+  const invited = users.filter((u) => u.invitedPending && u.isActive).length;
+  const admins = users.filter((u) => u.role === "admin" && u.isActive).length;
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-3 sm:grid-cols-4">
+        <Summary label="Active users" value={activeMembers} />
+        <Summary label="Pending invites" value={invited} />
+        <Summary label="Admins" value={admins} />
+        <Summary label="Boards" value={boards.length} />
+      </div>
+
+      <div className="flex gap-1 rounded-lg border border-line bg-panel p-1 sm:w-fit" role="tablist">
+        {(
+          [
+            ["users", "Users", Users],
+            ["boards", "Boards", KanbanSquare],
+          ] as const
+        ).map(([key, label, Icon]) => (
+          <button
+            aria-selected={tab === key}
+            className={`inline-flex items-center gap-1.5 rounded-md px-4 py-1.5 text-sm font-semibold ${tab === key ? "bg-brand text-white" : "text-muted hover:text-white"}`}
+            key={key}
+            onClick={() => setTab(key)}
+            role="tab"
+            type="button"
+          >
+            <Icon className="h-4 w-4" /> {label}
+          </button>
+        ))}
+      </div>
+
+      {notice ? (
+        <p
+          className={`rounded-md border px-3 py-2 text-sm ${notice.tone === "ok" ? "border-emerald-900 bg-emerald-950/40 text-emerald-200" : "border-red-900 bg-red-950/50 text-red-200"}`}
+          role={notice.tone === "error" ? "alert" : "status"}
+        >
+          {notice.text}
+        </p>
+      ) : null}
+
+      {tab === "users" ? (
+        <UsersTab boards={boards} missingPresets={missingPresets} pending={pending} run={run} users={users} />
+      ) : (
+        <BoardsTab boards={boards} pending={pending} run={run} users={users} />
+      )}
+    </div>
+  );
+}
+
+type Run = (action: () => Promise<AdminResult>, success?: string) => void;
+
+// ---------------------------------------------------------------------------
+// Users
+// ---------------------------------------------------------------------------
+
+function UsersTab({
+  users,
+  boards,
+  missingPresets,
+  pending,
+  run,
+}: {
+  users: AdminUserRow[];
+  boards: AdminBoardRow[];
+  missingPresets: string[];
+  pending: boolean;
+  run: Run;
+}) {
+  const [confirmDelete, setConfirmDelete] = useState<AdminUserRow | null>(null);
+  const [accessFor, setAccessFor] = useState<AdminUserRow | null>(null);
+  const boardName = new Map(boards.map((b) => [b.id, b.name]));
+
+  return (
+    <div className="space-y-6">
+      <InviteForm boards={boards} disabled={pending} onInvite={(input) => run(() => inviteUserAction(input))} />
+
+      {missingPresets.length ? (
+        <section className="card border-brand/40 p-4">
+          <h2 className="flex items-center gap-2 text-sm font-bold text-white">
+            <ShieldCheck className="h-4 w-4 text-brand" /> Preset admins without an account
+          </h2>
+          <p className="mt-1 text-xs text-muted">These emails are listed in ADMIN_EMAILS but haven&apos;t been invited yet.</p>
+          <ul className="mt-3 flex flex-wrap gap-2">
+            {missingPresets.map((email) => (
+              <li key={email}>
+                <button className="btn-ghost py-1.5 text-xs" disabled={pending} onClick={() => run(() => inviteUserAction({ email, role: "admin" }))} type="button">
+                  <MailPlus className="h-3.5 w-3.5" /> Invite {email}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      <section className="card overflow-hidden">
+        <header className="border-b border-line px-4 py-3">
+          <h2 className="text-sm font-bold uppercase tracking-wider text-white">Users</h2>
+        </header>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[860px] text-left text-sm">
+            <thead className="text-xs uppercase tracking-wider text-muted">
+              <tr>
+                <th className="px-4 py-2 font-semibold">Person</th>
+                <th className="px-4 py-2 font-semibold">Role</th>
+                <th className="px-4 py-2 font-semibold">Boards</th>
+                <th className="px-4 py-2 font-semibold">Status</th>
+                <th className="px-4 py-2 font-semibold">Last sign-in</th>
+                <th className="px-4 py-2 text-right font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((row) => {
+                const locked = row.isPreset || row.isSelf;
+                const grants = Object.entries(row.access);
+                return (
+                  <tr className={`border-t border-line align-top ${row.isActive ? "" : "opacity-60"}`} key={row.id}>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-panel-2 text-muted">
+                          <UserRound className="h-4 w-4" />
+                        </span>
+                        <div className="min-w-0">
+                          <input
+                            aria-label={`Name for ${row.email}`}
+                            className="w-full max-w-56 rounded bg-transparent font-semibold text-white outline-none placeholder:font-normal placeholder:text-neutral-600 focus:ring-1 focus:ring-brand"
+                            defaultValue={row.name ?? ""}
+                            onBlur={(e) => {
+                              if (e.target.value.trim() !== (row.name ?? "")) run(() => renameUserAction(row.id, e.target.value));
+                            }}
+                            onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+                            placeholder="Add a name"
+                          />
+                          <div className="truncate text-xs text-muted">
+                            {row.email}
+                            {row.isSelf ? " · you" : ""}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {row.isPreset ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-brand/20 px-2.5 py-1 text-xs font-semibold text-white" title="Set by ADMIN_EMAILS">
+                          <Lock className="h-3 w-3" /> Preset admin
+                        </span>
+                      ) : (
+                        <select
+                          aria-label={`Role for ${row.email}`}
+                          className="rounded border border-line bg-ink px-2 py-1 text-xs text-neutral-200 disabled:opacity-60"
+                          disabled={pending || row.isSelf}
+                          onChange={(e) => run(() => setRoleAction(row.id, e.target.value as "admin" | "member"))}
+                          value={row.role}
+                        >
+                          <option value="member">Member</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {row.role === "admin" ? (
+                        <span className="text-xs text-muted">All boards</span>
+                      ) : (
+                        <div className="flex max-w-72 flex-wrap items-center gap-1">
+                          {grants.length ? (
+                            grants.map(([boardId, access]) => (
+                              <span className="rounded-full bg-panel-2 px-2 py-0.5 text-[0.7rem] text-neutral-300" key={boardId}>
+                                {boardName.get(boardId) ?? "Board"} · <span className={access === "team" ? "text-brand" : "text-muted"}>{ACCESS_LABEL[access]}</span>
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-xs text-amber-300">No boards</span>
+                          )}
+                          <button className="text-xs font-semibold text-muted underline-offset-2 hover:text-white hover:underline" onClick={() => setAccessFor(row)} type="button">
+                            Edit
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {!row.isActive ? <Badge tone="muted">Deactivated</Badge> : row.invitedPending ? <Badge tone="amber">Invited</Badge> : <Badge tone="green">Active</Badge>}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-muted">{formatWhen(row.lastSignInAt)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-1.5">
+                        {row.invitedPending && row.isActive ? (
+                          <button className="btn-ghost px-2.5 py-1.5 text-xs" disabled={pending} onClick={() => run(() => resendInviteAction(row.id))} type="button">
+                            <RotateCw className="h-3.5 w-3.5" /> Resend
+                          </button>
+                        ) : null}
+                        {!locked ? (
+                          <button className="btn-ghost px-2.5 py-1.5 text-xs" disabled={pending} onClick={() => run(() => setActiveAction(row.id, !row.isActive))} type="button">
+                            {row.isActive ? "Deactivate" : "Reactivate"}
+                          </button>
+                        ) : null}
+                        {!locked ? (
+                          <button aria-label={`Delete ${row.email}`} className="btn-ghost px-2 py-1.5 text-xs hover:text-brand" onClick={() => setConfirmDelete(row)} type="button">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {accessFor ? (
+        <Dialog onClose={() => setAccessFor(null)} size="sm" title={`Board access for ${accessFor.name ?? accessFor.email}`}>
+          <div className="space-y-2 p-5">
+            <p className="text-xs text-muted">
+              <strong className="text-neutral-300">Team</strong> works the board. <strong className="text-neutral-300">Requester</strong> submits requests and
+              follows their own.
+            </p>
+            {boards.length ? (
+              boards.map((board) => (
+                <label className="flex items-center gap-3 rounded-lg bg-panel-2 px-3 py-2" key={board.id}>
+                  <span className="min-w-0 flex-1 truncate text-sm text-white">{board.name}</span>
+                  <AccessSelect
+                    disabled={pending}
+                    onChange={(access) => {
+                      run(() => setBoardAccessAction(board.id, accessFor.id, access));
+                      setAccessFor({ ...accessFor, access: withAccess(accessFor.access, board.id, access) });
+                    }}
+                    value={accessFor.access[board.id] ?? null}
+                  />
+                </label>
+              ))
+            ) : (
+              <p className="text-sm text-muted">Create a board first.</p>
+            )}
+          </div>
+        </Dialog>
+      ) : null}
+
+      {confirmDelete ? (
+        <ConfirmDialog
+          body={<p>Remove <strong className="text-white">{confirmDelete.email}</strong>? They lose access immediately. Their past requests and comments stay.</p>}
+          confirmLabel="Remove user"
+          danger
+          onCancel={() => setConfirmDelete(null)}
+          onConfirm={() => {
+            const target = confirmDelete;
+            setConfirmDelete(null);
+            run(() => deleteUserAction(target.id));
+          }}
+          title="Remove this user?"
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function withAccess(current: Record<string, Access>, boardId: string, access: Access | null) {
+  const next = { ...current };
+  if (access) next[boardId] = access;
+  else delete next[boardId];
+  return next;
+}
+
+function AccessSelect({ value, onChange, disabled }: { value: Access | null; onChange: (access: Access | null) => void; disabled?: boolean }) {
+  return (
+    <select
+      aria-label="Board access"
+      className="rounded border border-line bg-ink px-2 py-1 text-xs text-neutral-200"
+      disabled={disabled}
+      onChange={(e) => onChange((e.target.value || null) as Access | null)}
+      value={value ?? ""}
+    >
+      <option value="">No access</option>
+      <option value="team">Team</option>
+      <option value="requester">Requester</option>
+    </select>
+  );
+}
+
+function InviteForm({
+  boards,
+  onInvite,
+  disabled,
+}: {
+  boards: AdminBoardRow[];
+  onInvite: (input: { email: string; fullName: string; role: string; boards: BoardGrant[] }) => void;
+  disabled: boolean;
+}) {
+  const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [role, setRole] = useState("member");
+  const [access, setAccess] = useState<Record<string, Access>>({});
+
+  return (
+    <section className="card p-4">
+      <h2 className="flex items-center gap-2 text-sm font-bold text-white">
+        <MailPlus className="h-4 w-4 text-brand" /> Invite someone
+      </h2>
+      <form
+        className="mt-3 space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onInvite({
+            email,
+            fullName,
+            role,
+            boards: role === "admin" ? [] : Object.entries(access).map(([boardId, a]) => ({ boardId, access: a })),
+          });
+          setEmail("");
+          setFullName("");
+          setRole("member");
+          setAccess({});
+        }}
+      >
+        <div className="grid gap-2 sm:grid-cols-[1fr_1fr_9rem_auto]">
+          <input aria-label="Email" className="field" onChange={(e) => setEmail(e.target.value)} placeholder="name@company.com" required type="email" value={email} />
+          <input aria-label="Full name" className="field" onChange={(e) => setFullName(e.target.value)} placeholder="Full name (optional)" value={fullName} />
+          <select aria-label="Role" className="field" onChange={(e) => setRole(e.target.value)} value={role}>
+            <option value="member">Member</option>
+            <option value="admin">Admin</option>
+          </select>
+          <button className="btn-primary" disabled={disabled} type="submit">Send invite</button>
+        </div>
+        {role === "member" ? (
+          boards.length ? (
+            <div>
+              <span className="label">Board access</span>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {boards.map((board) => (
+                  <label className="flex items-center gap-3 rounded-lg bg-panel-2 px-3 py-2" key={board.id}>
+                    <span className="min-w-0 flex-1 truncate text-sm text-white">{board.name}</span>
+                    <AccessSelect onChange={(a) => setAccess((current) => withAccess(current, board.id, a))} value={access[board.id] ?? null} />
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-amber-300">Create a board first so new members have somewhere to go.</p>
+          )
+        ) : (
+          <p className="text-xs text-muted">Admins see every board, plus this admin screen.</p>
+        )}
+      </form>
+      <p className="mt-2 text-xs text-muted">They&apos;ll get an email with a link to set their password.</p>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Boards
+// ---------------------------------------------------------------------------
+
+function BoardsTab({ boards, users, pending, run }: { boards: AdminBoardRow[]; users: AdminUserRow[]; pending: boolean; run: Run }) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [membersFor, setMembersFor] = useState<AdminBoardRow | null>(null);
+  const [deleting, setDeleting] = useState<AdminBoardRow | null>(null);
+  const [confirmText, setConfirmText] = useState("");
+  const [localAccess, setLocalAccess] = useState<Record<string, Record<string, Access>>>({});
+  const members = users.filter((u) => u.role !== "admin");
+  const accessOf = (user: AdminUserRow, boardId: string) => (localAccess[user.id] ?? user.access)[boardId] ?? null;
+
+  return (
+    <div className="space-y-6">
+      <section className="card p-4">
+        <h2 className="flex items-center gap-2 text-sm font-bold text-white">
+          <Plus className="h-4 w-4 text-brand" /> New board
+        </h2>
+        <form
+          className="mt-3 grid gap-2 sm:grid-cols-[1fr_2fr_auto]"
+          onSubmit={(e) => {
+            e.preventDefault();
+            run(() => createBoardAction({ name, description }));
+            setName("");
+            setDescription("");
+          }}
+        >
+          <input aria-label="Board name" className="field" maxLength={80} minLength={2} onChange={(e) => setName(e.target.value)} placeholder="Board name, e.g. Client — Cascade Dental" required value={name} />
+          <input aria-label="Description" className="field" maxLength={300} onChange={(e) => setDescription(e.target.value)} placeholder="What this board is for (optional)" value={description} />
+          <button className="btn-primary" disabled={pending} type="submit">Create board</button>
+        </form>
+      </section>
+
+      <section className="space-y-3">
+        {boards.length ? (
+          boards.map((board) => {
+            const team = members.filter((u) => accessOf(u, board.id) === "team").length;
+            const requesters = members.filter((u) => accessOf(u, board.id) === "requester").length;
+            return (
+              <article className="card p-4" key={board.id}>
+                <div className="flex flex-wrap items-start gap-3">
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <input
+                      aria-label="Board name"
+                      className="w-full rounded bg-transparent text-lg font-bold text-white outline-none focus:ring-1 focus:ring-brand"
+                      defaultValue={board.name}
+                      maxLength={80}
+                      onBlur={(e) => {
+                        const value = e.target.value.trim();
+                        if (value && value !== board.name) run(() => updateBoardAction(board.id, { name: value }), "Board renamed.");
+                      }}
+                      onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+                    />
+                    <input
+                      aria-label="Board description"
+                      className="w-full rounded bg-transparent text-sm text-muted outline-none placeholder:text-neutral-600 focus:ring-1 focus:ring-brand"
+                      defaultValue={board.description ?? ""}
+                      maxLength={300}
+                      onBlur={(e) => {
+                        if (e.target.value.trim() !== (board.description ?? "")) run(() => updateBoardAction(board.id, { description: e.target.value }), "Description saved.");
+                      }}
+                      placeholder="Add a description"
+                    />
+                    <p className="text-xs text-muted">
+                      /b/{board.slug} · {board.requestCount} request{board.requestCount === 1 ? "" : "s"} · {team} team · {requesters} requester
+                      {requesters === 1 ? "" : "s"} · admins see all boards
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    <Link className="btn-ghost px-2.5 py-1.5 text-xs" href={`/b/${board.slug}`}>
+                      <ExternalLink className="h-3.5 w-3.5" /> Open
+                    </Link>
+                    <button className="btn-ghost px-2.5 py-1.5 text-xs" onClick={() => setMembersFor(board)} type="button">
+                      <Users className="h-3.5 w-3.5" /> Manage access
+                    </button>
+                    <button
+                      className="btn-danger px-2.5 py-1.5 text-xs"
+                      onClick={() => {
+                        setConfirmText("");
+                        setDeleting(board);
+                      }}
+                      type="button"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> Delete
+                    </button>
+                  </div>
+                </div>
+              </article>
+            );
+          })
+        ) : (
+          <p className="card p-6 text-sm text-muted">No boards yet. Create one above.</p>
+        )}
+      </section>
+
+      {membersFor ? (
+        <Dialog onClose={() => setMembersFor(null)} size="sm" title={`Access to ${membersFor.name}`}>
+          <div className="space-y-2 p-5">
+            <p className="text-xs text-muted">
+              <strong className="text-neutral-300">Team</strong> works the board. <strong className="text-neutral-300">Requester</strong> submits requests and
+              follows their own. Admins always have access.
+            </p>
+            {members.length ? (
+              members.map((user) => (
+                <label className="flex items-center gap-3 rounded-lg bg-panel-2 px-3 py-2" key={user.id}>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm text-white">{user.name ?? user.email}</span>
+                    {user.name ? <span className="block truncate text-xs text-muted">{user.email}</span> : null}
+                  </span>
+                  <AccessSelect
+                    disabled={pending}
+                    onChange={(access) => {
+                      setLocalAccess((current) => ({ ...current, [user.id]: withAccess(current[user.id] ?? user.access, membersFor.id, access) }));
+                      run(() => setBoardAccessAction(membersFor.id, user.id, access));
+                    }}
+                    value={accessOf(user, membersFor.id)}
+                  />
+                </label>
+              ))
+            ) : (
+              <p className="text-sm text-muted">Invite members from the Users tab first.</p>
+            )}
+          </div>
+        </Dialog>
+      ) : null}
+
+      {deleting ? (
+        <ConfirmDialog
+          body={
+            <>
+              <p>
+                This permanently deletes <strong className="text-white">{deleting.name}</strong> and its {deleting.requestCount} request
+                {deleting.requestCount === 1 ? "" : "s"}, including conversations and files. It can&apos;t be undone.
+              </p>
+              <label className="block">
+                <span className="label">Type the board name to confirm</span>
+                <input autoFocus className="field" onChange={(e) => setConfirmText(e.target.value)} value={confirmText} />
+              </label>
+            </>
+          }
+          confirmLabel="Delete board"
+          danger
+          onCancel={() => setDeleting(null)}
+          onConfirm={() => {
+            if (confirmText.trim() !== deleting.name) return;
+            const target = deleting;
+            setDeleting(null);
+            run(() => deleteBoardAction(target.id));
+          }}
+          title="Delete this board?"
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function Summary({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="card px-4 py-3">
+      <div className="text-xs uppercase tracking-wider text-muted">{label}</div>
+      <div className="mt-1 text-2xl font-black tabular-nums text-white">{value}</div>
+    </div>
+  );
+}
+
+function Badge({ tone, children }: { tone: "green" | "amber" | "muted"; children: React.ReactNode }) {
+  const styles = {
+    green: "bg-emerald-950 text-emerald-300 ring-emerald-800",
+    amber: "bg-amber-950 text-amber-300 ring-amber-800",
+    muted: "bg-panel-2 text-muted ring-line",
+  } as const;
+  return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${styles[tone]}`}>{children}</span>;
+}

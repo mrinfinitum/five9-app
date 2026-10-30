@@ -1,18 +1,30 @@
-# Five9 Media — Project Tracker
+# Five9 Media — Request Pipeline
 
-Next.js 16 app (App Router, Cache Components, Tailwind v4) with Supabase auth and Postgres.
-Invite-only email login, a project board (kanban + table), and an admin screen for managing users.
+Next.js 16 app (App Router, Cache Components, Tailwind v4) with Supabase auth, Postgres, and storage.
+A multi-board request pipeline modelled on the Sales Hub marketing request pipeline, branded for Five9 Media.
 
 ## Features
 
-- **Project board** — Inbox → In Progress → Client Review → On Hold → Completed. Drag cards between columns,
-  switch to a table view, search and filter by person, priority, and type, archive finished work.
-- **Project details** — status, priority, type, client, dates, team, description, subtasks
-  (Not started / Working on it / Stuck / Done), budget and expenses, and a team update feed.
-  Each project has a shareable link (`/projects?project=F9-1001`).
-- **Invite-only login** — email + password or a one-time email link. Public sign-up is off; only invited people get in.
-- **Admin screen** (`/admin`) — invite users, resend invites, set Admin/Member, deactivate, or remove.
-  **Preset admins** come from `ADMIN_EMAILS` and are always admins (they can't be demoted or removed in the UI).
+- **Boards** — admins create as many boards as they need (e.g. one per client or team). Each user is given
+  access per board as **Team** (works the board) or **Requester** (submits requests and follows their own).
+  Admins see every board.
+- **Team board** (`/b/<board>`) — Board, Table, and Archive views; Inbox → On Hold → In Progress → Creative Review
+  → Completed (→ Cancelled). Drag cards between columns, quick-edit type/priority/status/assignees from the card,
+  right-click menu (open, move to, archive, delete), search and filters ("My tickets", assignee, priority, type),
+  sortable table columns, collapsible groups, overdue/due-soon highlighting (On Hold pauses the clock),
+  "Archive closed", and shareable links (`?request=F9-1001`).
+- **Request details** — editable title/details, status, priority, type (add new categories on the fly), due date,
+  change requester, assignees, file attachments (up to 10 × 50 MB), and a conversation with **internal notes**
+  and automatic status history.
+- **Requester view** — "Tell us what you need" form plus *Your requests* with progress bars, conversation, and
+  file uploads.
+- **Emails** — new requests and requester replies go to the team inbox (`NOTIFY_EMAILS`, default
+  geoff@ and travis@pgamemes.com); requesters get a confirmation, team replies, new files, and a completion
+  email with a one-click **satisfaction survey**; assignees get an assignment email.
+- **Analytics** (`/b/<board>/analytics`) — requester happiness, completed volume, contributors, turnaround
+  (excluding On Hold), on-time rate, completion trend, by-person and by-type breakdowns, recent completions.
+- **Admin** (`/admin`) — invite users (with board access), roles, deactivate/remove users; create, rename, and
+  delete boards and manage who can see each one. Preset admins come from `ADMIN_EMAILS`.
 
 ## Setup
 
@@ -42,6 +54,9 @@ Copy `.env.example` to `.env.local` and fill it in (same values go in Vercel →
 | `SUPABASE_SECRET_KEY` | Secret key (`sb_secret_…`) or legacy service_role key — **server only** |
 | `NEXT_PUBLIC_SITE_URL` | Optional. Your app URL for email links; defaults to the URL the app is visited on |
 | `ADMIN_EMAILS` | Comma-separated preset admin emails |
+| `NOTIFY_EMAILS` | Optional. Team inbox for new requests (defaults to geoff@ and travis@pgamemes.com) |
+| `EMAIL_FROM` | Sender address for notifications |
+| `RESEND_API_KEY` *or* `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASSWORD` | Email provider — without one, emails are skipped |
 
 ### 3. First admin sign-in
 
@@ -65,10 +80,13 @@ npm run dev
 ## Project layout
 
 ```
-app/(app)/projects   board page + server actions
-app/(app)/admin      admin screen + server actions
+app/(app)/boards     board picker (home)
+app/(app)/b/[slug]   team board or requester view, analytics, server actions
+app/(app)/admin      users & boards admin + server actions
+app/survey/[token]   public one-click satisfaction survey
 app/login, app/forgot-password, app/account/set-password, app/auth/*   auth flows
-components/projects  board, detail drawer, new-project dialog
+components/requests  board, request details, requester view, analytics
+lib/email            email sending + notification rules
 lib/auth.ts          current user + admin checks (preset admins from ADMIN_EMAILS)
 proxy.ts             refreshes the Supabase session, redirects signed-out visitors
 supabase/migrations  database schema + row-level security

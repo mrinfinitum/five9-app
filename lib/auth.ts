@@ -1,5 +1,6 @@
 import "server-only";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { cache } from "react";
 import { isPresetAdmin } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -9,6 +10,8 @@ export type CurrentUser = {
   id: string;
   email: string;
   name: string;
+  role: "admin" | "member";
+  /** Admins see every board and the admin screen; members only see boards they're given. */
   isAdmin: boolean;
   isPresetAdmin: boolean;
 };
@@ -19,6 +22,8 @@ export type CurrentUser = {
  * promoted and re-activated automatically.
  */
 export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
+  // Session checks compare token expiry with the clock, so always run at request time.
+  await connection();
   const supabase = await createClient();
   const { data: claimsData } = await supabase.auth.getClaims();
   const claims = claimsData?.claims;
@@ -50,6 +55,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     id: userId,
     email,
     name: profile.full_name || email.split("@")[0],
+    role: profile.role === "admin" ? "admin" : "member",
     isAdmin: profile.role === "admin",
     isPresetAdmin: preset,
   };
@@ -63,6 +69,6 @@ export async function requireUser() {
 
 export async function requireAdmin() {
   const user = await requireUser();
-  if (!user.isAdmin) redirect("/projects");
+  if (!user.isAdmin) redirect("/boards");
   return user;
 }

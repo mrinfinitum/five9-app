@@ -28,7 +28,7 @@ export function SetPasswordForm() {
     if (name.trim() && data.user) {
       await fetch("/api/profile", { method: "POST", body: JSON.stringify({ fullName: name.trim() }) });
     }
-    window.location.replace("/projects");
+    window.location.replace("/boards");
   }
 
   return (
