@@ -132,7 +132,7 @@ body {
     @apply inline-flex items-center justify-center gap-2 rounded-md px-3.5 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand border border-red-900 bg-red-950/40 text-red-300 hover:bg-red-900/60 hover:text-white;
   }
   .field {
-    @apply w-full rounded-md border border-line bg-ink px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand;
+    @apply w-full rounded-md border border-line bg-ink px-3 py-2 text-base text-white sm:text-sm placeholder:text-neutral-500 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand;
   }
   .label {
     @apply mb-1 block text-xs font-semibold uppercase tracking-wider text-muted;

@@ -17,7 +17,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
         <div className="h-0.5 bg-gradient-to-r from-brand via-brand/60 to-transparent" />
       </header>
-      <div className="flex-1">{children}</div>
+      <div className="flex-1 pb-20 sm:pb-0">{children}</div>
     </div>
   );
 }

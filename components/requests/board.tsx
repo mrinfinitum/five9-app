@@ -15,6 +15,7 @@ import {
   Paperclip,
   Plus,
   Search,
+  SlidersHorizontal,
   Table2,
   Trash2,
   UserRound,
@@ -105,6 +106,7 @@ export function RequestBoard({ board, requests, team, people, requesterOptions, 
   const [notice, setNotice] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [extraTypes, setExtraTypes] = useState<RequestType[]>([]);
   const today = useToday();
 
@@ -498,8 +500,8 @@ export function RequestBoard({ board, requests, team, people, requesterOptions, 
   return (
     <div>
       {/* Toolbar */}
-      <div className="sticky top-16 z-20 -mx-4 mb-5 flex flex-wrap items-center gap-2 border-b border-line bg-ink/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
-        <div aria-label="Board view" className="flex rounded-md border border-line bg-panel p-0.5" role="group">
+      <div className="-mx-4 mb-5 flex flex-wrap items-center gap-2 border-b border-line bg-ink/95 px-4 py-3 backdrop-blur sm:sticky sm:top-16 sm:z-20 sm:-mx-6 sm:px-6">
+        <div aria-label="Board view" className="flex w-full rounded-md border border-line bg-panel p-0.5 sm:w-auto" role="group">
           {(
             [
               ["board", "Board", KanbanSquare],
@@ -509,7 +511,7 @@ export function RequestBoard({ board, requests, team, people, requesterOptions, 
           ).map(([key, label, Icon]) => (
             <button
               aria-pressed={view === key}
-              className={`inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-sm font-semibold ${view === key ? "bg-brand text-on-brand" : "text-muted hover:text-white"}`}
+              className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded px-3 py-1.5 text-sm font-semibold sm:flex-none ${view === key ? "bg-brand text-on-brand" : "text-muted hover:text-white"}`}
               key={key}
               onClick={() => switchView(key)}
               type="button"
@@ -522,11 +524,21 @@ export function RequestBoard({ board, requests, team, people, requesterOptions, 
             </button>
           ))}
         </div>
-        <label className="relative min-w-48 flex-1 sm:max-w-xs">
+        <label className="relative min-w-0 flex-1 sm:min-w-48 sm:max-w-xs">
           <span className="sr-only">Search requests</span>
           <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
           <input className="field pl-9" onChange={(e) => setQuery(e.target.value)} placeholder="Search requests…" type="search" value={query} />
         </label>
+        <button
+          aria-expanded={filtersOpen}
+          className={`btn-ghost px-3 sm:hidden ${filtersActive ? "!border-brand !text-white" : ""}`}
+          onClick={() => setFiltersOpen((v) => !v)}
+          type="button"
+        >
+          <SlidersHorizontal className="h-4 w-4" /> Filters
+        </button>
+        {/* On phones the filters fold away behind the Filters button; on larger screens they sit inline. */}
+        <div className={`${filtersOpen ? "grid" : "hidden"} w-full grid-cols-2 gap-2 sm:contents`}>
         <button
           aria-pressed={assigneeFilter === currentUser.id}
           className={`btn-ghost px-3 ${assigneeFilter === currentUser.id ? "!border-brand !text-white" : ""}`}
@@ -535,20 +547,20 @@ export function RequestBoard({ board, requests, team, people, requesterOptions, 
         >
           <UserRound className="h-4 w-4" /> My tickets
         </button>
-        <select aria-label="Filter by assignee" className="field w-auto" onChange={(e) => setAssigneeFilter(e.target.value)} value={assigneeFilter}>
+        <select aria-label="Filter by assignee" className="field sm:w-auto" onChange={(e) => setAssigneeFilter(e.target.value)} value={assigneeFilter}>
           <option value="all">Assignee: anyone</option>
           <option value="unassigned">Unassigned</option>
           {team.map((p) => (
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
         </select>
-        <select aria-label="Filter by priority" className="field w-auto" onChange={(e) => setPriorityFilter(e.target.value)} value={priorityFilter}>
+        <select aria-label="Filter by priority" className="field sm:w-auto" onChange={(e) => setPriorityFilter(e.target.value)} value={priorityFilter}>
           <option value="all">Priority: all</option>
           {REQUEST_PRIORITIES.map((p) => (
             <option key={p.key} value={p.key}>{p.name}</option>
           ))}
         </select>
-        <select aria-label="Filter by type" className="field w-auto" onChange={(e) => setTypeFilter(e.target.value)} value={typeFilter}>
+        <select aria-label="Filter by type" className="field sm:w-auto" onChange={(e) => setTypeFilter(e.target.value)} value={typeFilter}>
           <option value="all">Type: all</option>
           {types.map((t) => (
             <option key={t.key} value={t.key}>{t.name}</option>
@@ -573,8 +585,9 @@ export function RequestBoard({ board, requests, team, people, requesterOptions, 
             <Archive className="h-4 w-4" /> Archive closed
           </button>
         ) : null}
+        </div>
         <span className="text-xs text-muted">{countLabel}</span>
-        <button className="btn-primary ml-auto" onClick={() => setCreating(true)} type="button">
+        <button className="btn-primary ml-auto w-full sm:w-auto" onClick={() => setCreating(true)} type="button">
           <Plus className="h-4 w-4" /> New request
         </button>
       </div>
@@ -586,14 +599,14 @@ export function RequestBoard({ board, requests, team, people, requesterOptions, 
       ) : null}
 
       {view === "board" ? (
-        <div className="flex gap-3 overflow-x-auto pb-6" aria-label="Request board">
+        <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-px-4 px-4 pb-6 sm:mx-0 sm:snap-none sm:px-0" aria-label="Request board">
           {columns.map(({ status, requests: items }) => {
             const isCollapsed = collapsed.has(status.key);
             const isTarget = dropTarget?.status === status.key;
             return (
               <section
                 aria-label={`${status.name} column`}
-                className={`flex min-w-64 flex-1 basis-0 flex-col rounded-xl border bg-panel/60 transition-colors ${isTarget ? "border-brand/70 bg-panel" : "border-line"}`}
+                className={`flex min-w-[82vw] flex-1 basis-0 snap-start flex-col rounded-xl border bg-panel/60 transition-colors sm:min-w-64 ${isTarget ? "border-brand/70 bg-panel" : "border-line"}`}
                 key={status.key}
                 onDragLeave={(e) => {
                   if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropTarget(null);

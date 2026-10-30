@@ -69,17 +69,24 @@ export function RequestDrawer({
       header={
         <div>
           <span className="font-mono text-xs font-semibold uppercase tracking-wider text-brand">{request.code}</span>
-          <input
+          {/* A textarea so long titles wrap instead of scrolling off the side on phones. */}
+          <textarea
             aria-label="Request title"
-            className="mt-0.5 w-full rounded bg-transparent text-xl font-bold text-white outline-none focus:ring-1 focus:ring-brand"
+            className="mt-0.5 w-full resize-none rounded bg-transparent text-lg font-bold leading-snug text-white outline-none [field-sizing:content] focus:ring-1 focus:ring-brand sm:text-xl"
             defaultValue={request.title}
             maxLength={160}
             onBlur={(e) => {
-              const title = e.target.value.trim();
+              const title = e.target.value.replace(/\s+/g, " ").trim();
               if (!title) e.target.value = request.title;
               else if (title !== request.title) mutate(patch({ title }), () => updateRequestAction(request.id, { title }));
             }}
-            onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                e.currentTarget.blur();
+              }
+            }}
+            rows={1}
           />
           <p className="mt-1 text-sm text-muted">
             Requested by{" "}

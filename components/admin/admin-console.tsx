@@ -82,7 +82,7 @@ export function AdminConsole({ users, boards, missingPresets }: { users: AdminUs
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Summary label="Active users" value={activeMembers} />
         <Summary label="Pending invites" value={invited} />
         <Summary label="Admins" value={admins} />
@@ -176,9 +176,10 @@ function UsersTab({
         <header className="border-b border-line px-4 py-3">
           <h2 className="text-sm font-bold uppercase tracking-wider text-white">Users</h2>
         </header>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[860px] text-left text-sm">
-            <thead className="text-xs uppercase tracking-wider text-muted">
+        <div className="md:overflow-x-auto">
+          {/* Phones: each user is a stacked card. Wider screens: a regular table. */}
+          <table className="block w-full text-left text-sm md:table md:min-w-[860px]">
+            <thead className="hidden text-xs uppercase tracking-wider text-muted md:table-header-group">
               <tr>
                 <th className="px-4 py-2 font-semibold">Person</th>
                 <th className="px-4 py-2 font-semibold">Role</th>
@@ -188,13 +189,13 @@ function UsersTab({
                 <th className="px-4 py-2 text-right font-semibold">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="block md:table-row-group">
               {users.map((row) => {
                 const locked = row.isPreset || row.isSelf;
                 const grants = Object.entries(row.access);
                 return (
-                  <tr className={`border-t border-line align-top ${row.isActive ? "" : "opacity-60"}`} key={row.id}>
-                    <td className="px-4 py-3">
+                  <tr className={`flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line px-4 py-3 align-top md:table-row md:p-0 ${row.isActive ? "" : "opacity-60"}`} key={row.id}>
+                    <td className="w-full md:table-cell md:w-auto md:px-4 md:py-3">
                       <div className="flex items-center gap-3">
                         <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-panel-2 text-muted">
                           <UserRound className="h-4 w-4" />
@@ -217,7 +218,7 @@ function UsersTab({
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="md:table-cell md:px-4 md:py-3">
                       {row.isPreset ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-brand/20 px-2.5 py-1 text-xs font-semibold text-white" title="Set by ADMIN_EMAILS">
                           <Lock className="h-3 w-3" /> Preset admin
@@ -235,7 +236,7 @@ function UsersTab({
                         </select>
                       )}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="w-full md:table-cell md:w-auto md:px-4 md:py-3">
                       {row.role === "admin" ? (
                         <span className="text-xs text-muted">All boards</span>
                       ) : (
@@ -255,12 +256,12 @@ function UsersTab({
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="md:table-cell md:px-4 md:py-3">
                       {!row.isActive ? <Badge tone="muted">Deactivated</Badge> : row.invitedPending ? <Badge tone="amber">Invited</Badge> : <Badge tone="green">Active</Badge>}
                     </td>
-                    <td className="px-4 py-3 text-xs text-muted">{formatWhen(row.lastSignInAt)}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1.5">
+                    <td className="text-xs text-muted md:table-cell md:px-4 md:py-3"><span className="md:hidden">Last sign-in: </span>{formatWhen(row.lastSignInAt)}</td>
+                    <td className="w-full md:table-cell md:w-auto md:px-4 md:py-3">
+                      <div className="flex items-center gap-1.5 md:justify-end">
                         {row.invitedPending && row.isActive ? (
                           <button className="btn-ghost px-2.5 py-1.5 text-xs" disabled={pending} onClick={() => run(() => resendInviteAction(row.id))} type="button">
                             <RotateCw className="h-3.5 w-3.5" /> Resend
@@ -466,7 +467,7 @@ function BoardsTab({ boards, users, pending, run }: { boards: AdminBoardRow[]; u
             const requesters = members.filter((u) => accessOf(u, board.id) === "requester").length;
             return (
               <article className="card p-4" key={board.id}>
-                <div className="flex flex-wrap items-start gap-4">
+                <div className="flex flex-col gap-4 md:flex-row md:items-start">
                   <LogoEditor board={board} disabled={pending} run={run} />
                   <div className="min-w-0 flex-1 space-y-1">
                     <label className="group flex items-center gap-2">
@@ -608,7 +609,7 @@ function Badge({ tone, children }: { tone: "green" | "amber" | "muted"; children
 function LogoEditor({ board, disabled, run }: { board: AdminBoardRow; disabled: boolean; run: Run }) {
   const onlyOne = Boolean(board.logoDarkUrl) !== Boolean(board.logoLightUrl);
   return (
-    <div className="w-72 shrink-0 space-y-2">
+    <div className="w-full shrink-0 space-y-2 md:w-72">
       <div className="grid grid-cols-2 gap-2">
         <LogoSlot board={board} disabled={disabled} mode="dark" run={run} />
         <LogoSlot board={board} disabled={disabled} mode="light" run={run} />

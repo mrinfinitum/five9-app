@@ -9,8 +9,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "invite-admins": "node --env-file=.env.local scripts/invite-admins.mjs",
-    "migrate": "node --env-file=.env.local scripts/migrate.mjs",
-    "import-monday": "node --env-file=.env.local scripts/import-monday.mjs"
+    "migrate": "node --env-file=.env.local scripts/migrate.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

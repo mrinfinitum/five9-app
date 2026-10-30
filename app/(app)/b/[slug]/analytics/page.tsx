@@ -39,7 +39,7 @@ async function AnalyticsLoader({ params }: { params: Promise<{ slug: string }> }
       <Link className="mb-4 inline-flex items-center gap-1 text-sm text-muted hover:text-white" href={`/b/${board.slug}`}>
         <ArrowLeft className="h-4 w-4" /> Back to {board.name}
       </Link>
-      <header className="mb-6 flex flex-wrap items-end gap-4">
+      <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-4">
         <BoardLogo board={board} size="lg" />
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.25em] text-brand">

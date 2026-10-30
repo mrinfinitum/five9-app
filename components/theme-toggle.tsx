@@ -23,7 +23,7 @@ export function ThemeToggle() {
   return (
     <button
       aria-label={`Switch to ${next} mode`}
-      className="fixed bottom-4 right-4 z-[70] grid h-11 w-11 place-items-center rounded-full border border-line bg-panel text-neutral-200 shadow-lg shadow-black/30 transition hover:border-brand hover:text-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+      className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-[70] grid h-10 w-10 sm:h-11 sm:w-11 place-items-center rounded-full border border-line bg-panel text-neutral-200 shadow-lg shadow-black/30 transition hover:border-brand hover:text-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
       onClick={() => {
         document.documentElement.dataset.theme = next;
         document.documentElement.style.colorScheme = next;
