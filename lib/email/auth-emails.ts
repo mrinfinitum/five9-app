@@ -74,7 +74,13 @@ export async function sendAuthEmail(
         ? "Set your password"
         : "Sign in to Five9 Media";
 
-  await sendEmail({ to: [email], subject: COPY[kind].subject, html: render(kind, heading, url, email, origin) });
+  try {
+    await sendEmail({ to: [email], subject: COPY[kind].subject, html: render(kind, heading, url, email, origin) });
+  } catch (sendError) {
+    // An invite creates the account; don't leave one behind that never got its email.
+    if (kind === "invite") await createAdminClient().auth.admin.deleteUser(data.user.id);
+    throw sendError;
+  }
   return { sent: true, userId: data.user.id };
 }
 

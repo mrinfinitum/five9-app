@@ -51,7 +51,10 @@ export async function sendEmail(email: OutgoingEmail) {
       body: JSON.stringify({ from: fromAddress(), to, subject: email.subject, html: email.html, reply_to: email.replyTo }),
       signal: AbortSignal.timeout(15_000),
     });
-    if (!response.ok) throw new Error(`Resend rejected the email (${response.status})`);
+    if (!response.ok) {
+      const detail = await response.json().then((body: { message?: string }) => body.message).catch(() => null);
+      throw new Error(`Resend rejected the email (${response.status})${detail ? `: ${detail}` : ""}`);
+    }
     return;
   }
 
