@@ -54,9 +54,9 @@ async function BoardLoader({ params }: { params: Promise<{ slug: string }> }) {
               <BoardLogo board={board} size="lg" />
             </div>
           ) : null}
-          <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.25em] text-brand">
+          <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.25em] text-brand">
             <Megaphone className="h-3.5 w-3.5" /> <BoardName boardId={board.id} canEdit={user.isAdmin} name={board.name} />
-          </p>
+          </div>
           <h1 className="mt-1 text-3xl font-black tracking-tight text-white">Tell us what you need</h1>
           <p className="mt-2 max-w-2xl text-sm text-muted">
             Submit a request for video, photo, design, social, web, or campaign work — then follow its progress from intake to
@@ -76,9 +76,9 @@ async function BoardLoader({ params }: { params: Promise<{ slug: string }> }) {
       <header className="mb-4 flex flex-wrap items-end gap-4">
         <BoardLogo board={board} size="lg" />
         <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.25em] text-brand">
+          <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.25em] text-brand">
             <KanbanSquare className="h-3.5 w-3.5" /> <BoardName boardId={board.id} canEdit={user.isAdmin} name={board.name} />
-          </p>
+          </div>
           <h1 className="mt-1 text-3xl font-black tracking-tight text-white">Request pipeline</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted">
             Every request on this board. Drag cards between columns to update status — requesters see the change in their thread
