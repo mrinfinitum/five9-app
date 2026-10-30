@@ -19,7 +19,7 @@ const REQUEST_SELECT = `id, board_id, number, title, description, status, priori
   request_comments(id, body, author_id, is_internal, kind, created_at),
   request_attachments(id, file_name, file_size, uploaded_by, created_at)`;
 
-function mapRequest(row: Row): RequestItem {
+export function mapRequest(row: Row): RequestItem {
   return {
     id: row.id as string,
     boardId: row.board_id as string,
@@ -62,7 +62,10 @@ function mapRequest(row: Row): RequestItem {
 }
 
 /** Requests on a board visible to the signed-in user (RLS: the team sees all, requesters see their own). */
-export async function listRequests(boardId: string, options: { requesterId?: string } = {}): Promise<RequestItem[]> {
+export async function listRequests(
+  boardId: string,
+  options: { requesterId?: string; activeOnly?: boolean } = {},
+): Promise<RequestItem[]> {
   const supabase = await createClient();
   let query = supabase
     .from("requests")
@@ -70,9 +73,37 @@ export async function listRequests(boardId: string, options: { requesterId?: str
     .eq("board_id", boardId)
     .order("created_at", { ascending: false });
   if (options.requesterId) query = query.eq("requester_id", options.requesterId);
+  if (options.activeOnly) query = query.is("archived_at", null);
   const { data, error } = await query;
   check(error);
   return (data ?? []).map(mapRequest);
+}
+
+const SUMMARY_SELECT = `id, board_id, number, title, description, status, priority, request_type, due_date, requester_id,
+  created_by, sort_order, completed_at, archived_at, created_at, updated_at, request_assignees(user_id)`;
+
+/**
+ * Archived requests without their conversation and files — the Archive tab only
+ * needs the summary. Full details load when one is opened (see getRequestAction).
+ */
+export async function listArchivedSummaries(boardId: string): Promise<RequestItem[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("requests")
+    .select(SUMMARY_SELECT)
+    .eq("board_id", boardId)
+    .not("archived_at", "is", null)
+    .order("archived_at", { ascending: false });
+  check(error);
+  return (data ?? []).map((row) => ({ ...mapRequest(row as Row), partial: true }));
+}
+
+/** One request with everything (conversation, files), or null if the user can't see it. */
+export async function getRequest(requestId: string): Promise<RequestItem | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("requests").select(REQUEST_SELECT).eq("id", requestId).maybeSingle();
+  check(error);
+  return data ? mapRequest(data as Row) : null;
 }
 
 export async function listPeople(): Promise<Person[]> {
@@ -149,20 +180,15 @@ export async function getBoardContext(slug: string): Promise<{ board: Board; acc
   return { board: mapBoard(board), access };
 }
 
-/** People who can work a board: admins plus the board's team members. */
-export async function listBoardTeam(boardId: string, people: Person[]): Promise<Person[]> {
+/** Board access in one query: `team` = admins + team members; `requesters` = everyone with access. */
+export async function listBoardPeople(boardId: string, people: Person[]): Promise<{ team: Person[]; requesters: Person[] }> {
   const supabase = await createClient();
-  const { data, error } = await supabase.from("board_members").select("user_id").eq("board_id", boardId).eq("access", "team");
+  const { data, error } = await supabase.from("board_members").select("user_id, access").eq("board_id", boardId);
   check(error);
-  const teamIds = new Set((data ?? []).map((m) => m.user_id));
-  return people.filter((person) => person.isActive && (person.role === "admin" || teamIds.has(person.id)));
-}
-
-/** People who can submit requests on a board (anyone with access), for "request on behalf of". */
-export async function listBoardRequesters(boardId: string, people: Person[]): Promise<Person[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase.from("board_members").select("user_id").eq("board_id", boardId);
-  check(error);
-  const memberIds = new Set((data ?? []).map((m) => m.user_id));
-  return people.filter((person) => person.isActive && (person.role === "admin" || memberIds.has(person.id)));
+  const access = new Map((data ?? []).map((m) => [m.user_id, m.access]));
+  const active = people.filter((person) => person.isActive);
+  return {
+    team: active.filter((person) => person.role === "admin" || access.get(person.id) === "team"),
+    requesters: active.filter((person) => person.role === "admin" || access.has(person.id)),
+  };
 }

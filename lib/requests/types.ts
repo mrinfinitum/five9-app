@@ -65,6 +65,8 @@ export type RequestItem = {
   assigneeIds: string[];
   comments: RequestComment[];
   attachments: RequestAttachment[];
+  /** Archived requests load without their conversation and files until opened. */
+  partial?: boolean;
 };
 
 export type CurrentUserInfo = { id: string; isAdmin: boolean };

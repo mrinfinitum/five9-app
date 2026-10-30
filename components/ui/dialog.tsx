@@ -42,7 +42,8 @@ export function Dialog({
       <div className="flex max-h-[92vh] flex-col">
         <div className="flex items-start gap-3 border-b border-line px-5 py-4">
           <div className="min-w-0 flex-1">{header ?? <h2 className="text-lg font-bold text-white">{title}</h2>}</div>
-          <button aria-label="Close" className="rounded-md p-1.5 text-muted hover:bg-panel-2 hover:text-white" onClick={onClose} type="button">
+          {/* autoFocus keeps the browser from focusing (and outlining) the first field when the dialog opens. */}
+          <button aria-label="Close" autoFocus className="rounded-md p-1.5 text-muted hover:bg-panel-2 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand" onClick={onClose} type="button">
             <X className="h-5 w-5" />
           </button>
         </div>

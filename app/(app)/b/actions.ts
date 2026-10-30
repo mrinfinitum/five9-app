@@ -14,6 +14,8 @@ import {
   isOneOf,
   requestCode,
 } from "@/lib/requests/constants";
+import { getRequest } from "@/lib/requests/data";
+import type { RequestItem } from "@/lib/requests/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -231,6 +233,18 @@ export async function deleteRequestAction(requestId: string): Promise<ActionResu
     }
     refresh();
     return { ok: true };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+/** Full details (conversation, files) for a request the board loaded as a summary. */
+export async function getRequestAction(requestId: string): Promise<ActionResult<{ request: RequestItem }>> {
+  try {
+    await context();
+    const request = await getRequest(requestId);
+    if (!request) throw new Error("That request isn't available.");
+    return { ok: true, request };
   } catch (error) {
     return fail(error);
   }

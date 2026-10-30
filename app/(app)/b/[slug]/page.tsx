@@ -12,8 +12,8 @@ import { requireUser } from "@/lib/auth";
 import {
   MissingSchemaError,
   getBoardContext,
-  listBoardRequesters,
-  listBoardTeam,
+  listArchivedSummaries,
+  listBoardPeople,
   listPeople,
   listRequestTypes,
   listRequests,
@@ -69,8 +69,14 @@ async function BoardLoader({ params }: { params: Promise<{ slug: string }> }) {
     );
   }
 
-  const [requests, people, requestTypes] = await Promise.all([listRequests(board.id), listPeople(), listRequestTypes()]);
-  const [team, requesterOptions] = await Promise.all([listBoardTeam(board.id, people), listBoardRequesters(board.id, people)]);
+  const [active, archived, people, requestTypes] = await Promise.all([
+    listRequests(board.id, { activeOnly: true }),
+    listArchivedSummaries(board.id),
+    listPeople(),
+    listRequestTypes(),
+  ]);
+  const requests = [...active, ...archived];
+  const { team, requesters: requesterOptions } = await listBoardPeople(board.id, people);
 
   return (
     <>

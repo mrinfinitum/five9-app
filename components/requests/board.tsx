@@ -24,6 +24,7 @@ import {
 import { Fragment, useCallback, useEffect, useMemo, useOptimistic, useState, useTransition } from "react";
 import {
   archiveClosedAction,
+  getRequestAction,
   createRequestTypeAction,
   deleteRequestAction,
   setArchivedAction,
@@ -107,6 +108,7 @@ export function RequestBoard({ board, requests, team, people, requesterOptions, 
   const [toast, setToast] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [details, setDetails] = useState<Record<string, RequestItem>>({});
   const [extraTypes, setExtraTypes] = useState<RequestType[]>([]);
   const today = useToday();
 
@@ -147,6 +149,21 @@ export function RequestBoard({ board, requests, team, people, requesterOptions, 
     else url.searchParams.delete("request");
     window.history.replaceState(null, "", url);
   }, [selectedId, optimistic]);
+
+  const openPartialId = optimistic.find((r) => r.id === selectedId && r.partial)?.id ?? null;
+  useEffect(() => {
+    if (!openPartialId) return;
+    let cancelled = false;
+    void getRequestAction(openPartialId).then((result) => {
+      if (cancelled) return;
+      if (result.ok) setDetails((current) => ({ ...current, [openPartialId]: result.request }));
+      else setToast(result.error);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // `requests` changes after every saved edit, so open details stay current.
+  }, [openPartialId, requests]);
 
   useEffect(() => {
     if (!toast && !notice) return;
@@ -490,7 +507,20 @@ export function RequestBoard({ board, requests, team, people, requesterOptions, 
     );
   }
 
-  const selected = optimistic.find((r) => r.id === selectedId) ?? null;
+  const selectedBase = optimistic.find((r) => r.id === selectedId) ?? null;
+  // Archived requests arrive as summaries; merge in their conversation and files once loaded,
+  // keeping any comments just posted (temp ids) until the refreshed details include them.
+  const selectedDetails = selectedBase?.partial ? details[selectedBase.id] : undefined;
+  const selected: RequestItem | null = selectedBase
+    ? selectedDetails
+      ? {
+          ...selectedBase,
+          partial: false,
+          comments: [...selectedDetails.comments, ...selectedBase.comments.filter((c) => c.id.startsWith("temp-"))],
+          attachments: selectedDetails.attachments,
+        }
+      : selectedBase
+    : null;
   const fieldRequest = fieldMenu ? optimistic.find((r) => r.id === fieldMenu.requestId) : null;
   const contextRequest = contextMenu ? optimistic.find((r) => r.id === contextMenu.requestId) : null;
   const countLabel = filtersActive
@@ -524,7 +554,7 @@ export function RequestBoard({ board, requests, team, people, requesterOptions, 
             </button>
           ))}
         </div>
-        <label className="relative min-w-0 flex-1 sm:min-w-48 sm:max-w-xs">
+        <label className="relative min-w-0 flex-1 sm:w-48 sm:flex-none">
           <span className="sr-only">Search requests</span>
           <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
           <input className="field pl-9" onChange={(e) => setQuery(e.target.value)} placeholder="Search requests…" type="search" value={query} />
@@ -547,20 +577,20 @@ export function RequestBoard({ board, requests, team, people, requesterOptions, 
         >
           <UserRound className="h-4 w-4" /> My tickets
         </button>
-        <select aria-label="Filter by assignee" className="field sm:w-auto" onChange={(e) => setAssigneeFilter(e.target.value)} value={assigneeFilter}>
+        <select aria-label="Filter by assignee" className="field sm:w-auto sm:max-w-[10rem]" onChange={(e) => setAssigneeFilter(e.target.value)} value={assigneeFilter}>
           <option value="all">Assignee: anyone</option>
           <option value="unassigned">Unassigned</option>
           {team.map((p) => (
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
         </select>
-        <select aria-label="Filter by priority" className="field sm:w-auto" onChange={(e) => setPriorityFilter(e.target.value)} value={priorityFilter}>
+        <select aria-label="Filter by priority" className="field sm:w-auto sm:max-w-[10rem]" onChange={(e) => setPriorityFilter(e.target.value)} value={priorityFilter}>
           <option value="all">Priority: all</option>
           {REQUEST_PRIORITIES.map((p) => (
             <option key={p.key} value={p.key}>{p.name}</option>
           ))}
         </select>
-        <select aria-label="Filter by type" className="field sm:w-auto" onChange={(e) => setTypeFilter(e.target.value)} value={typeFilter}>
+        <select aria-label="Filter by type" className="field sm:w-auto sm:max-w-[10rem]" onChange={(e) => setTypeFilter(e.target.value)} value={typeFilter}>
           <option value="all">Type: all</option>
           {types.map((t) => (
             <option key={t.key} value={t.key}>{t.name}</option>
@@ -586,7 +616,7 @@ export function RequestBoard({ board, requests, team, people, requesterOptions, 
           </button>
         ) : null}
         </div>
-        <span className="text-xs text-muted">{countLabel}</span>
+        <span className="text-xs text-muted sm:hidden 2xl:inline">{countLabel}</span>
         <button className="btn-primary ml-auto w-full sm:w-auto" onClick={() => setCreating(true)} type="button">
           <Plus className="h-4 w-4" /> New request
         </button>
@@ -767,9 +797,10 @@ export function RequestBoard({ board, requests, team, people, requesterOptions, 
                                   <td className="px-3 py-2">
                                     <input
                                       aria-label={`Due date for ${request.code}`}
-                                      className={`rounded border border-transparent bg-transparent px-1 py-0.5 text-xs hover:border-line focus:border-brand focus:outline-none ${due ? DUE_TEXT[due] : "text-neutral-300"}`}
+                                      className={`rounded border border-transparent bg-transparent px-1 py-0.5 text-xs hover:border-line focus:border-brand focus:outline-none [&:not(:focus):invalid]:text-transparent ${due ? DUE_TEXT[due] : "text-neutral-300"}`}
                                       defaultValue={request.dueDate ?? ""}
                                       key={`${request.id}-${request.dueDate ?? "none"}`}
+                                      required /* lets an empty date be styled blank instead of "mm/dd/yyyy" */
                                       onBlur={(e) => {
                                         if (e.target.value === (request.dueDate ?? "")) return;
                                         const value = e.target.value || null;
