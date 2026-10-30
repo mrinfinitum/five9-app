@@ -268,9 +268,8 @@ export async function createBoardLogoUploadAction(
 
 /**
  * Saves an uploaded logo for dark or light mode (or clears it with null) and
- * deletes the replaced file. With only one logo set, it's used in both modes.
- * An SVG is always the board's single logo for both modes (colour each mode
- * with the tint instead), so it replaces both slots.
+ * deletes the replaced file. Each mode's logo is independent (any format,
+ * SVG included); with only one set, it's used in both modes.
  */
 export async function setBoardLogoAction(boardId: string, path: string | null, mode: "dark" | "light"): Promise<AdminResult> {
   return guard(async () => {
@@ -286,19 +285,14 @@ export async function setBoardLogoAction(boardId: string, path: string | null, m
       }
     }
     const { data: board } = await admin.from("boards").select("logo_path, logo_light_path").eq("id", boardId).maybeSingle();
-    const update = isSvg
-      ? { logo_path: path, logo_light_path: null }
-      : { [mode === "light" ? "logo_light_path" : "logo_path"]: path };
+    const column = mode === "light" ? "logo_light_path" : "logo_path";
+    const update = { [column]: path };
     const { error } = await admin.from("boards").update(update).eq("id", boardId);
     if (error) throw new Error(error.message);
 
-    const replaced = isSvg
-      ? [board?.logo_path, board?.logo_light_path]
-      : [mode === "light" ? board?.logo_light_path : board?.logo_path];
-    const stale = replaced.filter((p): p is string => Boolean(p) && p !== path);
-    if (stale.length) await admin.storage.from(BOARD_LOGO_BUCKET).remove(stale);
+    const previous = board?.[column];
+    if (previous && previous !== path) await admin.storage.from(BOARD_LOGO_BUCKET).remove([previous]);
 
-    if (isSvg) return "SVG logo saved — it's used in both modes. Pick a color for each mode below it.";
     const label = mode === "light" ? "Light-mode logo" : "Dark-mode logo";
     return path ? `${label} updated.` : `${label} removed.`;
   });

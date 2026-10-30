@@ -604,8 +604,6 @@ function Badge({ tone, children }: { tone: "green" | "amber" | "muted"; children
 }
 
 function LogoEditor({ board, disabled, run }: { board: AdminBoardRow; disabled: boolean; run: Run }) {
-  const svg = board.logoDarkUrl?.endsWith(".svg") && !board.logoLightUrl;
-  if (svg) return <SvgLogoEditor board={board} disabled={disabled} run={run} />;
   const onlyOne = Boolean(board.logoDarkUrl) !== Boolean(board.logoLightUrl);
   return (
     <div className="w-72 shrink-0 space-y-2">
@@ -615,37 +613,9 @@ function LogoEditor({ board, disabled, run }: { board: AdminBoardRow; disabled: 
       </div>
       <p className="text-[0.7rem] text-muted">
         {onlyOne
-          ? "One logo is used in both modes until you add the other."
-          : "Tip: upload an SVG once and pick a color for each mode. PNG, JPG, WebP or GIF also work · up to 2 MB."}
+          ? "One logo is used in both modes until you add the other — use Color to repaint it per mode."
+          : "SVG, PNG, JPG, WebP or GIF · up to 2 MB each. Color repaints single-color logos."}
       </p>
-    </div>
-  );
-}
-
-/** One SVG for both modes, with a colour per mode. */
-function SvgLogoEditor({ board, disabled, run }: { board: AdminBoardRow; disabled: boolean; run: Run }) {
-  const { busy, error, upload } = useLogoUpload(board, "dark", run);
-  return (
-    <div className="w-72 shrink-0 space-y-2">
-      <span className="block text-[0.65rem] font-semibold uppercase tracking-wider text-muted">SVG logo · both modes</span>
-      <div className="grid grid-cols-2 gap-2">
-        {(["dark", "light"] as const).map((mode) => {
-          const tint = mode === "dark" ? board.logoDarkTint : board.logoLightTint;
-          return (
-            <div className="space-y-1" key={mode}>
-              <LogoPreview board={board} mode={mode} src={board.logoDarkUrl!} tint={tint} />
-              <TintPicker disabled={disabled} mode={mode} onChange={(color) => run(() => setBoardLogoTintAction(board.id, mode, color))} value={tint} />
-            </div>
-          );
-        })}
-      </div>
-      <div className="flex flex-wrap gap-1">
-        <UploadButton busy={busy} disabled={disabled} label="Replace" onFile={upload} />
-        <button className="btn-ghost px-1.5 py-0.5 text-[0.7rem]" disabled={disabled} onClick={() => run(() => setBoardLogoAction(board.id, null, "dark"))} type="button">
-          Remove
-        </button>
-      </div>
-      {error ? <p className="text-[0.7rem] text-red-300" role="alert">{error}</p> : null}
     </div>
   );
 }
