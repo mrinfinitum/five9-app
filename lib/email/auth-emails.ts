@@ -8,8 +8,8 @@ import { escapeHtml } from "./templates";
  * Account emails (invites, password links, sign-in links) sent by the app
  * through Resend/SMTP, from Five9 Media, instead of Supabase's mailer.
  * Supabase still creates the one-time link; we just deliver it.
- * Returns false when no email provider is set up, so callers can fall back
- * to having Supabase send the email.
+ * Returns { sent: false } when no email provider is set up or delivery fails,
+ * so callers can fall back to having Supabase send the email.
  */
 
 type Kind = "invite" | "recovery" | "magiclink";
@@ -77,9 +77,11 @@ export async function sendAuthEmail(
   try {
     await sendEmail({ to: [email], subject: COPY[kind].subject, html: render(kind, heading, url, email, origin) });
   } catch (sendError) {
-    // An invite creates the account; don't leave one behind that never got its email.
+    // Delivery failed (e.g. the sending domain isn't verified): undo the invite's
+    // new account and let the caller fall back to Supabase sending the email.
+    console.error("[auth-email] falling back to Supabase:", sendError);
     if (kind === "invite") await createAdminClient().auth.admin.deleteUser(data.user.id);
-    throw sendError;
+    return { sent: false };
   }
   return { sent: true, userId: data.user.id };
 }
@@ -102,6 +104,5 @@ export async function sendPublicAuthEmail(kind: "recovery" | "magiclink", rawEma
   await admin.auth.admin.updateUserById(profile.id, {
     app_metadata: { ...userData.user?.app_metadata, last_auth_email_at: Date.now() },
   });
-  await sendAuthEmail(kind, email, { next });
-  return true;
+  return (await sendAuthEmail(kind, email, { next })).sent;
 }
