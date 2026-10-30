@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+/* Five9 Media brand: red and black */
+@theme {
+  --color-brand: #e10600;
+  --color-brand-hover: #ff1f17;
+  --color-brand-dark: #a30400;
+  --color-ink: #0a0a0a;
+  --color-panel: #141414;
+  --color-panel-2: #1c1c1c;
+  --color-line: #2a2a2a;
+  --color-muted: #9a9a9a;
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-ink);
+  color: #f2f2f2;
+}
+
+::selection {
+  background: var(--color-brand);
+  color: white;
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-3.5 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-3.5 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand bg-brand text-white hover:bg-brand-hover;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-3.5 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand border border-line bg-panel text-neutral-200 hover:border-neutral-500 hover:text-white;
+  }
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-3.5 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand border border-red-900 bg-red-950/40 text-red-300 hover:bg-red-900/60 hover:text-white;
+  }
+  .field {
+    @apply w-full rounded-md border border-line bg-ink px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand;
+  }
+  .label {
+    @apply mb-1 block text-xs font-semibold uppercase tracking-wider text-muted;
+  }
+  .card {
+    @apply rounded-xl border border-line bg-panel;
+  }
+}
+
+/* Native date picker icon on dark backgrounds */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.6;
+}
