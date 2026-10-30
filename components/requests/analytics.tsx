@@ -125,7 +125,7 @@ export function BoardAnalytics({ data, boardSlug }: { data: AnalyticsData; board
         {PERIODS.map((option) => (
           <button
             aria-pressed={period === option.key}
-            className={`rounded-md px-3 py-1.5 text-sm font-semibold ${period === option.key ? "bg-brand text-white" : "text-muted hover:text-white"}`}
+            className={`rounded-md px-3 py-1.5 text-sm font-semibold ${period === option.key ? "bg-brand text-on-brand" : "text-muted hover:text-white"}`}
             key={option.key}
             onClick={() => setPeriod(option.key)}
             type="button"
@@ -303,8 +303,8 @@ function TrendChart({ buckets }: { buckets: { key: string; label: string; count:
           const y = height - padBottom - (value / niceMax) * (height - padTop - padBottom);
           return (
             <g key={value}>
-              <line stroke="#262626" strokeWidth="1" x1={padX} x2={width - padX} y1={y} y2={y} />
-              <text fill="#8a8a8a" fontSize="11" textAnchor="end" x={padX - 6} y={y + 4}>
+              <line stroke="var(--color-line)" strokeWidth="1" x1={padX} x2={width - padX} y1={y} y2={y} />
+              <text fill="var(--color-muted)" fontSize="11" textAnchor="end" x={padX - 6} y={y + 4}>
                 {Number.isInteger(value) ? value : value.toFixed(1)}
               </text>
             </g>
@@ -313,15 +313,15 @@ function TrendChart({ buckets }: { buckets: { key: string; label: string; count:
         <polyline fill="none" points={line} stroke={BRAND} strokeLinejoin="round" strokeWidth="2" />
         {active ? (
           <>
-            <line stroke="#666" strokeWidth="1" x1={active.x} x2={active.x} y1={padTop} y2={height - padBottom} />
-            <circle cx={active.x} cy={active.y} fill={BRAND} r="5" stroke="#141414" strokeWidth="2" />
+            <line stroke="var(--color-muted)" strokeWidth="1" x1={active.x} x2={active.x} y1={padTop} y2={height - padBottom} />
+            <circle cx={active.x} cy={active.y} fill={BRAND} r="5" stroke="var(--color-panel)" strokeWidth="2" />
           </>
         ) : null}
         {[0, Math.floor((points.length - 1) / 2), points.length - 1]
           .filter((v, i, all) => all.indexOf(v) === i)
           .map((index) => (
             <text
-              fill="#8a8a8a"
+              fill="var(--color-muted)"
               fontSize="11"
               key={index}
               textAnchor={index === 0 ? "start" : index === points.length - 1 ? "end" : "middle"}

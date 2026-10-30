@@ -16,10 +16,10 @@ export type Board = {
   name: string;
   slug: string;
   description: string | null;
-  /** Public URL of the board's logo, if one was uploaded. */
-  logoUrl: string | null;
-  /** Backdrop the logo is shown on, so dark or light logos both stay visible. */
-  logoBackground: "dark" | "light";
+  /** Logo shown in dark mode (falls back to the light-mode logo). */
+  logoDarkUrl: string | null;
+  /** Logo shown in light mode (falls back to the dark-mode logo). */
+  logoLightUrl: string | null;
 };
 
 export type RequestType = { key: string; name: string };

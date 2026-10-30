@@ -2,7 +2,8 @@ import { ChartNoAxesCombined, KanbanSquare, Megaphone } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { BoardLogo } from "@/components/board-logo";
+import { BoardLogo, hasBoardLogo } from "@/components/board-logo";
+import { BoardName } from "@/components/board-name";
 import { RequestBoard } from "@/components/requests/board";
 import { RequesterPortal } from "@/components/requests/portal";
 import { SetupNotice } from "@/components/setup-notice";
@@ -48,13 +49,13 @@ async function BoardLoader({ params }: { params: Promise<{ slug: string }> }) {
     return (
       <>
         <header className="mb-6">
-          {board.logoUrl ? (
+          {hasBoardLogo(board) ? (
             <div className="mb-4">
               <BoardLogo board={board} size="lg" />
             </div>
           ) : null}
           <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.25em] text-brand">
-            <Megaphone className="h-3.5 w-3.5" /> {board.name}
+            <Megaphone className="h-3.5 w-3.5" /> <BoardName boardId={board.id} canEdit={user.isAdmin} name={board.name} />
           </p>
           <h1 className="mt-1 text-3xl font-black tracking-tight text-white">Tell us what you need</h1>
           <p className="mt-2 max-w-2xl text-sm text-muted">
@@ -76,7 +77,7 @@ async function BoardLoader({ params }: { params: Promise<{ slug: string }> }) {
         <BoardLogo board={board} size="lg" />
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.25em] text-brand">
-            <KanbanSquare className="h-3.5 w-3.5" /> {board.name}
+            <KanbanSquare className="h-3.5 w-3.5" /> <BoardName boardId={board.id} canEdit={user.isAdmin} name={board.name} />
           </p>
           <h1 className="mt-1 text-3xl font-black tracking-tight text-white">Request pipeline</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted">

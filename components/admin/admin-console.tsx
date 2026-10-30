@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, ImagePlus, KanbanSquare, Lock, MailPlus, Plus, RotateCw, ShieldCheck, Trash2, UserRound, Users } from "lucide-react";
+import { ExternalLink, ImagePlus, Pencil, KanbanSquare, Lock, MailPlus, Plus, RotateCw, ShieldCheck, Trash2, UserRound, Users } from "lucide-react";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import {
@@ -19,7 +19,6 @@ import {
   type AdminResult,
   type BoardGrant,
 } from "@/app/(app)/admin/actions";
-import { BoardLogo } from "@/components/board-logo";
 import { ConfirmDialog, Dialog } from "@/components/ui/dialog";
 import { BOARD_LOGO_BUCKET, LOGO_TYPES, MAX_LOGO_BYTES } from "@/lib/requests/constants";
 import { createClient } from "@/lib/supabase/client";
@@ -45,8 +44,8 @@ export type AdminBoardRow = {
   name: string;
   slug: string;
   description: string | null;
-  logoUrl: string | null;
-  logoBackground: "dark" | "light";
+  logoDarkUrl: string | null;
+  logoLightUrl: string | null;
   requestCount: number;
 };
 
@@ -93,7 +92,7 @@ export function AdminConsole({ users, boards, missingPresets }: { users: AdminUs
         ).map(([key, label, Icon]) => (
           <button
             aria-selected={tab === key}
-            className={`inline-flex items-center gap-1.5 rounded-md px-4 py-1.5 text-sm font-semibold ${tab === key ? "bg-brand text-white" : "text-muted hover:text-white"}`}
+            className={`inline-flex items-center gap-1.5 rounded-md px-4 py-1.5 text-sm font-semibold ${tab === key ? "bg-brand text-on-brand" : "text-muted hover:text-white"}`}
             key={key}
             onClick={() => setTab(key)}
             role="tab"
@@ -464,10 +463,12 @@ function BoardsTab({ boards, users, pending, run }: { boards: AdminBoardRow[]; u
                 <div className="flex flex-wrap items-start gap-4">
                   <LogoEditor board={board} disabled={pending} run={run} />
                   <div className="min-w-0 flex-1 space-y-1">
+                    <label className="group flex items-center gap-2">
                     <input
                       aria-label="Board name"
-                      className="w-full rounded bg-transparent text-lg font-bold text-white outline-none focus:ring-1 focus:ring-brand"
+                      className="-mx-2 w-full rounded-md border border-transparent bg-transparent px-2 py-0.5 text-lg font-bold text-white outline-none hover:border-line focus:border-brand"
                       defaultValue={board.name}
+                      title="Click to rename this board"
                       maxLength={80}
                       onBlur={(e) => {
                         const value = e.target.value.trim();
@@ -475,6 +476,8 @@ function BoardsTab({ boards, users, pending, run }: { boards: AdminBoardRow[]; u
                       }}
                       onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
                     />
+                    <Pencil aria-hidden="true" className="h-4 w-4 shrink-0 text-muted opacity-60 group-hover:opacity-100" />
+                    </label>
                     <input
                       aria-label="Board description"
                       className="w-full rounded bg-transparent text-sm text-muted outline-none placeholder:text-neutral-600 focus:ring-1 focus:ring-brand"
@@ -486,7 +489,7 @@ function BoardsTab({ boards, users, pending, run }: { boards: AdminBoardRow[]; u
                       placeholder="Add a description"
                     />
                     <p className="text-xs text-muted">
-                      /b/{board.slug} · {board.requestCount} request{board.requestCount === 1 ? "" : "s"} · {team} team · {requesters} requester
+                      Link: /b/{board.slug} (stays the same if you rename) · {board.requestCount} request{board.requestCount === 1 ? "" : "s"} · {team} team · {requesters} requester
                       {requesters === 1 ? "" : "s"} · admins see all boards
                     </p>
                   </div>
@@ -597,14 +600,32 @@ function Badge({ tone, children }: { tone: "green" | "amber" | "muted"; children
 }
 
 function LogoEditor({ board, disabled, run }: { board: AdminBoardRow; disabled: boolean; run: Run }) {
+  const onlyOne = Boolean(board.logoDarkUrl) !== Boolean(board.logoLightUrl);
+  return (
+    <div className="w-60 shrink-0 space-y-2">
+      <div className="grid grid-cols-2 gap-2">
+        <LogoSlot board={board} disabled={disabled} mode="dark" run={run} />
+        <LogoSlot board={board} disabled={disabled} mode="light" run={run} />
+      </div>
+      <p className="text-[0.7rem] text-muted">
+        {onlyOne ? "One logo is used in both modes until you add the other." : "PNG, JPG, WebP or GIF · up to 2 MB each"}
+      </p>
+    </div>
+  );
+}
+
+function LogoSlot({ board, mode, disabled, run }: { board: AdminBoardRow; mode: "dark" | "light"; disabled: boolean; run: Run }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const own = mode === "dark" ? board.logoDarkUrl : board.logoLightUrl;
+  const fallback = mode === "dark" ? board.logoLightUrl : board.logoDarkUrl;
+  const shown = own ?? fallback;
 
   async function upload(file: File | undefined) {
     if (!file) return;
     setError(null);
-    if (!(LOGO_TYPES as readonly string[]).includes(file.type)) return setError("Use a PNG, JPG, WebP, or GIF.");
-    if (file.size > MAX_LOGO_BYTES) return setError("Logos can be up to 2 MB.");
+    if (!(LOGO_TYPES as readonly string[]).includes(file.type)) return setError("Use PNG, JPG, WebP, or GIF.");
+    if (file.size > MAX_LOGO_BYTES) return setError("Up to 2 MB.");
     setBusy(true);
     try {
       const target = await createBoardLogoUploadAction(board.id, file.type, file.size);
@@ -613,7 +634,7 @@ function LogoEditor({ board, disabled, run }: { board: AdminBoardRow; disabled: 
         .storage.from(BOARD_LOGO_BUCKET)
         .uploadToSignedUrl(target.path, target.token, file, { contentType: file.type });
       if (uploadError) throw new Error(uploadError.message);
-      run(() => setBoardLogoAction(board.id, target.path));
+      run(() => setBoardLogoAction(board.id, target.path, mode));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed.");
     } finally {
@@ -622,15 +643,27 @@ function LogoEditor({ board, disabled, run }: { board: AdminBoardRow; disabled: 
   }
 
   return (
-    <div className="w-44 shrink-0 space-y-2">
-      {board.logoUrl ? (
-        <BoardLogo board={board} size="lg" />
-      ) : (
-        <span className="grid h-20 w-full place-items-center rounded-lg border border-dashed border-line text-xs text-muted">No logo</span>
-      )}
-      <div className="flex flex-wrap gap-1.5">
-        <label className={`btn-ghost cursor-pointer px-2 py-1 text-xs ${busy || disabled ? "pointer-events-none opacity-60" : ""}`}>
-          <ImagePlus className="h-3.5 w-3.5" /> {busy ? "Uploading…" : board.logoUrl ? "Replace" : "Upload logo"}
+    <div className="space-y-1">
+      <span className="block text-[0.65rem] font-semibold uppercase tracking-wider text-muted">{mode === "dark" ? "Dark mode" : "Light mode"}</span>
+      {/* Preview on the background it will actually appear on. */}
+      <div
+        className={`relative grid h-16 place-items-center overflow-hidden rounded-lg border p-2 ${
+          mode === "dark" ? "border-[#2a2a2a] bg-[#0a0a0a]" : "border-[#e0e0de] bg-[#f4f4f3]"
+        }`}
+      >
+        {shown ? (
+          // eslint-disable-next-line @next/next/no-img-element -- small admin preview of a just-uploaded file
+          <img alt={`${board.name} ${mode} mode logo`} className={`max-h-full max-w-full object-contain ${own ? "" : "opacity-50"}`} src={shown} />
+        ) : (
+          <span className={`text-[0.7rem] ${mode === "dark" ? "text-[#9a9a9a]" : "text-[#686868]"}`}>No logo</span>
+        )}
+        {shown && !own ? (
+          <span className="absolute bottom-0.5 right-1 text-[0.55rem] font-semibold uppercase text-brand">Shared</span>
+        ) : null}
+      </div>
+      <div className="flex flex-wrap gap-1">
+        <label className={`btn-ghost cursor-pointer px-1.5 py-0.5 text-[0.7rem] ${busy || disabled ? "pointer-events-none opacity-60" : ""}`}>
+          <ImagePlus className="h-3 w-3" /> {busy ? "Uploading…" : own ? "Replace" : "Upload"}
           <input
             accept={LOGO_TYPES.join(",")}
             className="hidden"
@@ -641,32 +674,13 @@ function LogoEditor({ board, disabled, run }: { board: AdminBoardRow; disabled: 
             type="file"
           />
         </label>
-        {board.logoUrl ? (
-          <button className="btn-ghost px-2 py-1 text-xs" disabled={disabled} onClick={() => run(() => setBoardLogoAction(board.id, null))} type="button">
+        {own ? (
+          <button className="btn-ghost px-1.5 py-0.5 text-[0.7rem]" disabled={disabled} onClick={() => run(() => setBoardLogoAction(board.id, null, mode))} type="button">
             Remove
           </button>
         ) : null}
       </div>
-      {board.logoUrl ? (
-        <div className="flex items-center gap-1 text-xs text-muted" role="group" aria-label="Logo background">
-          Background:
-          {(["dark", "light"] as const).map((bg) => (
-            <button
-              aria-pressed={board.logoBackground === bg}
-              className={`rounded px-1.5 py-0.5 ${board.logoBackground === bg ? "bg-brand text-white" : "hover:text-white"}`}
-              disabled={disabled}
-              key={bg}
-              onClick={() => run(() => updateBoardAction(board.id, { logoBackground: bg }), "Logo background updated.")}
-              type="button"
-            >
-              {bg === "dark" ? "Dark" : "Light"}
-            </button>
-          ))}
-        </div>
-      ) : (
-        <p className="text-[0.7rem] text-muted">PNG, JPG, WebP or GIF · up to 2 MB</p>
-      )}
-      {error ? <p className="text-xs text-red-300" role="alert">{error}</p> : null}
+      {error ? <p className="text-[0.7rem] text-red-300" role="alert">{error}</p> : null}
     </div>
   );
 }

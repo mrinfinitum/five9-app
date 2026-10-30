@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { ThemeToggle } from "@/components/theme-toggle";
 import "./globals.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -10,10 +11,24 @@ export const metadata: Metadata = {
   description: "Five9 Media request tracker",
 };
 
+// Applies the saved theme before first paint so pages never flash the wrong colours.
+const themeScript = `try{var t=localStorage.getItem("f9-theme");if(t!=="light")t="dark";var d=document.documentElement;d.dataset.theme=t;d.style.colorScheme=t}catch(e){}`;
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
-      <body className="flex min-h-full flex-col">{children}</body>
+    <html
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      data-theme="dark"
+      lang="en"
+      suppressHydrationWarning
+    >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
+      <body className="flex min-h-full flex-col">
+        {children}
+        <ThemeToggle />
+      </body>
     </html>
   );
 }

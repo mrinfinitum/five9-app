@@ -509,7 +509,7 @@ export function RequestBoard({ board, requests, team, people, requesterOptions, 
           ).map(([key, label, Icon]) => (
             <button
               aria-pressed={view === key}
-              className={`inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-sm font-semibold ${view === key ? "bg-brand text-white" : "text-muted hover:text-white"}`}
+              className={`inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-sm font-semibold ${view === key ? "bg-brand text-on-brand" : "text-muted hover:text-white"}`}
               key={key}
               onClick={() => switchView(key)}
               type="button"

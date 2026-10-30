@@ -2,7 +2,7 @@ import { ArrowRight, KanbanSquare, Send } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { BoardLogo } from "@/components/board-logo";
+import { BoardLogo, hasBoardLogo } from "@/components/board-logo";
 import { SetupNotice } from "@/components/setup-notice";
 import { requireUser } from "@/lib/auth";
 import { MissingSchemaError, listMyBoards } from "@/lib/requests/data";
@@ -57,7 +57,7 @@ async function BoardList() {
       {boards.map((board) => (
         <Link className="card group flex flex-col p-5 transition hover:border-brand/70" href={`/b/${board.slug}`} key={board.id}>
           <BoardLogo board={board} size="md" />
-          <span className={`inline-flex w-fit items-center gap-1.5 rounded-full bg-panel-2 px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-widest text-muted ${board.logoUrl ? "mt-4" : ""}`}>
+          <span className={`inline-flex w-fit items-center gap-1.5 rounded-full bg-panel-2 px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-widest text-muted ${hasBoardLogo(board) ? "mt-4" : ""}`}>
             {board.access === "team" ? <KanbanSquare className="h-3 w-3 text-brand" /> : <Send className="h-3 w-3 text-brand" />}
             {board.access === "team" ? "Team board" : "Submit requests"}
           </span>

@@ -177,7 +177,7 @@ export async function createBoardAction(input: { name: string; description?: str
 
 export async function updateBoardAction(
   boardId: string,
-  input: { name?: string; description?: string; logoBackground?: "dark" | "light" },
+  input: { name?: string; description?: string },
 ): Promise<AdminResult> {
   return guard(async () => {
     const update: Record<string, string | null> = {};
@@ -187,7 +187,6 @@ export async function updateBoardAction(
       update.name = name;
     }
     if (input.description !== undefined) update.description = input.description.trim().slice(0, 300) || null;
-    if (input.logoBackground !== undefined) update.logo_background = input.logoBackground === "light" ? "light" : "dark";
     const { error } = await createAdminClient().from("boards").update(update).eq("id", boardId);
     if (error) throw new Error(error.message);
   });
@@ -197,9 +196,10 @@ export async function updateBoardAction(
 export async function deleteBoardAction(boardId: string): Promise<AdminResult> {
   return guard(async () => {
     const admin = createAdminClient();
-    const { data: board } = await admin.from("boards").select("name, logo_path").eq("id", boardId).maybeSingle();
+    const { data: board } = await admin.from("boards").select("name, logo_path, logo_light_path").eq("id", boardId).maybeSingle();
     if (!board) throw new Error("Board not found.");
-    if (board.logo_path) await admin.storage.from(BOARD_LOGO_BUCKET).remove([board.logo_path]);
+    const logos = [board.logo_path, board.logo_light_path].filter((p): p is string => Boolean(p));
+    if (logos.length) await admin.storage.from(BOARD_LOGO_BUCKET).remove(logos);
     const { data: files } = await admin
       .from("request_attachments")
       .select("storage_path, requests!inner(board_id)")
@@ -253,15 +253,21 @@ export async function createBoardLogoUploadAction(
   }
 }
 
-/** Saves an uploaded logo on the board (or clears it with null) and deletes the old file. */
-export async function setBoardLogoAction(boardId: string, path: string | null): Promise<AdminResult> {
+/**
+ * Saves an uploaded logo for dark or light mode (or clears it with null) and
+ * deletes the replaced file. With only one logo set, it's used in both modes.
+ */
+export async function setBoardLogoAction(boardId: string, path: string | null, mode: "dark" | "light"): Promise<AdminResult> {
   return guard(async () => {
     if (path && !path.startsWith(`${boardId}/`)) throw new Error("That file doesn't belong to this board.");
+    const column = mode === "light" ? "logo_light_path" : "logo_path";
     const admin = createAdminClient();
-    const { data: board } = await admin.from("boards").select("logo_path").eq("id", boardId).maybeSingle();
-    const { error } = await admin.from("boards").update({ logo_path: path }).eq("id", boardId);
+    const { data: board } = await admin.from("boards").select("logo_path, logo_light_path").eq("id", boardId).maybeSingle();
+    const { error } = await admin.from("boards").update({ [column]: path }).eq("id", boardId);
     if (error) throw new Error(error.message);
-    if (board?.logo_path && board.logo_path !== path) await admin.storage.from(BOARD_LOGO_BUCKET).remove([board.logo_path]);
-    return path ? "Logo updated." : "Logo removed.";
+    const previous = board?.[column];
+    if (previous && previous !== path) await admin.storage.from(BOARD_LOGO_BUCKET).remove([previous]);
+    const label = mode === "light" ? "Light-mode logo" : "Dark-mode logo";
+    return path ? `${label} updated.` : `${label} removed.`;
   });
 }

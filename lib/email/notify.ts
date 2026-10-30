@@ -53,7 +53,7 @@ async function deliver(event: RequestEvent, origin: string) {
   const admin = createAdminClient();
   const { data: request } = await admin
     .from("requests")
-    .select("id, board_id, number, title, status, requester_id, description, boards(slug, name, logo_path, logo_background)")
+    .select("id, board_id, number, title, status, requester_id, description, boards(slug, name, logo_path, logo_light_path)")
     .eq("id", event.requestId)
     .maybeSingle();
   if (!request) return;
@@ -79,12 +79,13 @@ async function deliver(event: RequestEvent, origin: string) {
     slug: string;
     name: string;
     logo_path: string | null;
-    logo_background: string;
+    logo_light_path: string | null;
   } | null;
-  // Show the board's logo at the top of its emails, on the tile colour chosen in Admin.
-  const logoUrl = boardLogoUrl(board?.logo_path);
+  // Emails have a white body: use the light-mode logo, or the dark-mode one on a black tile.
+  const lightLogo = boardLogoUrl(board?.logo_light_path);
+  const logoUrl = lightLogo ?? boardLogoUrl(board?.logo_path);
   if (logoUrl) {
-    const tile = board?.logo_background === "light" ? "#ffffff;border:1px solid #e5e5e5" : "#0a0a0a";
+    const tile = lightLogo ? "transparent" : "#0a0a0a";
     const banner = `<div style="margin:0 0 18px"><span style="display:inline-block;padding:8px 12px;border-radius:8px;background:${tile}"><img src="${escapeHtml(logoUrl)}" alt="${escapeHtml(board?.name ?? "")}" height="40" style="display:block;height:40px;width:auto;border:0" /></span></div>`;
     const plain = layout;
     layout = (content: string) => plain(banner + content);

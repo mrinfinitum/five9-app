@@ -27,7 +27,7 @@ export const PRIORITY_CHIP: Record<RequestPriority, string> = {
   low: "bg-neutral-800 text-neutral-400",
   normal: "bg-neutral-700 text-neutral-200",
   high: "bg-amber-900/60 text-amber-200",
-  urgent: "bg-brand text-white",
+  urgent: "bg-brand text-on-brand",
 };
 
 export function PriorityLabel({ priority, name }: { priority: RequestPriority; name: string }) {
@@ -45,7 +45,13 @@ function initials(name: string) {
   return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "?";
 }
 
-const AVATAR_TONES = ["bg-brand", "bg-neutral-600", "bg-red-900", "bg-zinc-500", "bg-neutral-800 ring-1 ring-brand"];
+const AVATAR_TONES = [
+  "bg-brand text-on-brand",
+  "bg-neutral-600 text-white",
+  "bg-red-900 text-white",
+  "bg-zinc-500 text-white",
+  "bg-neutral-800 text-white ring-1 ring-brand",
+];
 
 function tone(id: string) {
   let hash = 0;
@@ -56,7 +62,7 @@ function tone(id: string) {
 export function Avatar({ person, size = "sm" }: { person: Pick<Person, "id" | "name">; size?: "xs" | "sm" | "md" | "lg" }) {
   const sizes = { xs: "h-5 w-5 text-[0.55rem]", sm: "h-6 w-6 text-[0.6rem]", md: "h-8 w-8 text-xs", lg: "h-11 w-11 text-sm" };
   return (
-    <span className={`inline-grid shrink-0 place-items-center rounded-full font-bold text-white ring-2 ring-panel ${tone(person.id)} ${sizes[size]}`} title={person.name}>
+    <span className={`inline-grid shrink-0 place-items-center rounded-full font-bold ring-2 ring-panel ${tone(person.id)} ${sizes[size]}`} title={person.name}>
       {initials(person.name)}
     </span>
   );

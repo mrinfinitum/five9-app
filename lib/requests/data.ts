@@ -104,9 +104,9 @@ export async function listRequestTypes(): Promise<RequestType[]> {
   return data ?? [];
 }
 
-const BOARD_SELECT = "id, name, slug, description, logo_path, logo_background";
+const BOARD_SELECT = "id, name, slug, description, logo_path, logo_light_path";
 
-type BoardRow = { id: string; name: string; slug: string; description: string | null; logo_path: string | null; logo_background: string };
+type BoardRow = { id: string; name: string; slug: string; description: string | null; logo_path: string | null; logo_light_path: string | null };
 
 export function mapBoard(row: BoardRow): Board {
   return {
@@ -114,8 +114,8 @@ export function mapBoard(row: BoardRow): Board {
     name: row.name,
     slug: row.slug,
     description: row.description,
-    logoUrl: boardLogoUrl(row.logo_path),
-    logoBackground: row.logo_background === "light" ? "light" : "dark",
+    logoDarkUrl: boardLogoUrl(row.logo_path),
+    logoLightUrl: boardLogoUrl(row.logo_light_path),
   };
 }
 
