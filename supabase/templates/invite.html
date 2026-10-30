@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="light only" />
+<meta name="supported-color-schemes" content="light" />
+<title>Five9 Media</title>
+</head>
+<body style="margin:0;padding:0;background:#f2f2f0;-webkit-text-size-adjust:100%;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">{{ if .Data.invited_by }}{{ .Data.invited_by }} invited you to the Five9 Media request tracker.{{ else }}You're invited to the Five9 Media request tracker.{{ end }}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f2f2f0;">
+<tr><td align="center" style="padding:32px 16px;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#121212;">
+    <tr><td align="center" style="background:#0a0a0a;padding:28px 24px;border-bottom:4px solid #e10600;">
+      <img src="https://app.five9.media/five9-logo.png" alt="five9" width="120" height="51" style="display:block;width:120px;height:auto;border:0;" />
+    </td></tr>
+    <tr><td style="padding:36px 40px 8px 40px;">
+      <p style="margin:0 0 14px 0;font-size:16px;line-height:25px;color:#3a3a3a;">{{ if .Data.first_name }}Hi {{ .Data.first_name }},{{ else }}Hi there,{{ end }}</p>
+      <h1 style="margin:0 0 14px 0;font-size:26px;line-height:32px;font-weight:800;letter-spacing:-0.3px;color:#121212;">{{ if .Data.invited_by }}{{ .Data.invited_by }} invited you to join Five9 Media{{ else }}You're invited to join Five9 Media{{ end }}</h1>
+      <p style="margin:0 0 14px 0;font-size:16px;line-height:25px;color:#3a3a3a;">Five9 Media uses this workspace to manage creative requests &mdash; video, photo, design, social and web. Submit new requests, track progress from start to delivery, share files and keep every conversation in one place.</p>
+      {{ if .Data.boards }}
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:22px 0 6px 0;background:#f6f6f5;border-radius:12px;border-left:4px solid #e10600;">
+        <tr><td style="padding:16px 20px;">
+          <p style="margin:0 0 4px 0;font-size:11px;line-height:16px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#8a8a8a;">You&rsquo;ll have access to</p>
+          <p style="margin:0;font-size:16px;line-height:24px;font-weight:700;color:#121212;">{{ .Data.boards }}</p>
+        </td></tr>
+      </table>
+      {{ end }}
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:28px 0 8px 0;"><tr>
+        <td align="center" bgcolor="#e10600" style="border-radius:10px;">
+          <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:15px 34px;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:10px;">Accept invitation</a>
+        </td>
+      </tr></table>
+      <p style="margin:12px 0 0 0;font-size:14px;line-height:22px;color:#6b6b6b;">You&rsquo;ll choose a password, then go straight to your boards.</p>
+    </td></tr>
+    <tr><td style="padding:24px 40px 36px 40px;">
+      <p style="margin:0;font-size:13px;line-height:20px;color:#6b6b6b;">Button not working? Copy this link into your browser:<br /><a href="{{ .ConfirmationURL }}" style="color:#e10600;word-break:break-all;">{{ .ConfirmationURL }}</a></p>
+    </td></tr>
+    <tr><td style="padding:20px 40px;background:#fafafa;border-top:1px solid #ececec;">
+      <p style="margin:0;font-size:12px;line-height:18px;color:#8a8a8a;">This invitation was sent to {{ .Email }}. Five9 Media is invite-only &mdash; if you weren&rsquo;t expecting this, you can safely ignore it.</p>
+    </td></tr>
+  </table>
+  <p style="margin:16px 0 0 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:12px;color:#9a9a9a;">Five9 Media &middot; <a href="https://app.five9.media" style="color:#9a9a9a;">app.five9.media</a></p>
+</td></tr>
+</table>
+</body>
+</html>

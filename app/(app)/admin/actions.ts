@@ -16,11 +16,11 @@ export type AdminResult = { ok: true; message?: string } | { ok: false; error: s
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const BAN_FOREVER = "876000h"; // ~100 years
 
-async function guard(fn: (ctx: { actorId: string }) => Promise<string | void>): Promise<AdminResult> {
+async function guard(fn: (ctx: { actorId: string; actorName: string }) => Promise<string | void>): Promise<AdminResult> {
   try {
     const actor = await getCurrentUser();
     if (!actor?.isAdmin) throw new Error("Admins only.");
-    const message = await fn({ actorId: actor.id });
+    const message = await fn({ actorId: actor.id, actorName: actor.name });
     refresh();
     return { ok: true, message: message ?? undefined };
   } catch (error) {
@@ -38,6 +38,26 @@ async function inviteRedirect() {
   return `${await publicOrigin()}/auth/callback?next=/account/set-password`;
 }
 
+/**
+ * Details the Supabase invite email template shows ({{ .Data.invited_by }},
+ * {{ .Data.boards }}, ...). Stored on the new user's metadata.
+ */
+async function inviteDetails(input: { fullName?: string | null; invitedBy: string; role: "admin" | "member"; boardIds: string[] }) {
+  let boards = "All boards";
+  if (input.role !== "admin") {
+    const { data } = input.boardIds.length
+      ? await createAdminClient().from("boards").select("name").in("id", input.boardIds).order("name")
+      : { data: [] };
+    boards = (data ?? []).map((b) => b.name).join(", ");
+  }
+  return {
+    ...(input.fullName ? { full_name: input.fullName, first_name: input.fullName.split(/\s+/)[0] } : {}),
+    invited_by: input.invitedBy,
+    boards,
+    site_url: await publicOrigin(),
+  };
+}
+
 export async function inviteUserAction(input: {
   email: string;
   fullName?: string;
@@ -45,15 +65,16 @@ export async function inviteUserAction(input: {
   /** Boards the new member can use (ignored for admins, who see every board). */
   boardIds?: string[];
 }): Promise<AdminResult> {
-  return guard(async () => {
+  return guard(async ({ actorName }) => {
     const email = input.email.trim().toLowerCase();
     if (!EMAIL_RE.test(email)) throw new Error("Enter a valid email address.");
     const fullName = input.fullName?.trim().slice(0, 120) || undefined;
     const role = input.role === "admin" || isPresetAdmin(email) ? "admin" : "member";
+    const boardIds = role === "admin" ? [] : [...new Set(input.boardIds ?? [])];
 
     const admin = createAdminClient();
     const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
-      data: fullName ? { full_name: fullName } : undefined,
+      data: await inviteDetails({ fullName, invitedBy: actorName, role, boardIds }),
       redirectTo: await inviteRedirect(),
     });
     if (error) {
@@ -66,7 +87,6 @@ export async function inviteUserAction(input: {
       .upsert({ id: data.user.id, email, full_name: fullName ?? null, role, is_active: true }, { onConflict: "id" });
     if (profileError) throw new Error(profileError.message);
 
-    const boardIds = role === "admin" ? [] : [...new Set(input.boardIds ?? [])];
     if (boardIds.length) {
       const { error: accessError } = await admin
         .from("board_members")
@@ -78,10 +98,21 @@ export async function inviteUserAction(input: {
 }
 
 export async function resendInviteAction(userId: string): Promise<AdminResult> {
-  return guard(async () => {
+  return guard(async ({ actorName }) => {
     const email = await targetEmail(userId);
     const redirectTo = await inviteRedirect();
-    const { error } = await createAdminClient().auth.admin.inviteUserByEmail(email, { redirectTo });
+    const admin = createAdminClient();
+    const [{ data: profile }, { data: memberships }] = await Promise.all([
+      admin.from("profiles").select("full_name, role").eq("id", userId).maybeSingle(),
+      admin.from("board_members").select("board_id").eq("user_id", userId),
+    ]);
+    const data = await inviteDetails({
+      fullName: profile?.full_name,
+      invitedBy: actorName,
+      role: profile?.role === "admin" ? "admin" : "member",
+      boardIds: (memberships ?? []).map((m) => m.board_id),
+    });
+    const { error } = await admin.auth.admin.inviteUserByEmail(email, { data, redirectTo });
     if (!error) return `Invite re-sent to ${email}.`;
     if (!/already/i.test(error.message)) throw new Error(error.message);
 
