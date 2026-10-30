@@ -19,7 +19,10 @@ Invite-only email login, a project board (kanban + table), and an admin screen f
 ### 1. Supabase
 
 1. Create a Supabase project.
-2. **SQL Editor** → paste and run [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql).
+2. Database tables are created automatically on each production deploy: `npm run build` runs
+   [`scripts/migrate.mjs`](scripts/migrate.mjs), which applies any new files in `supabase/migrations/` using
+   `POSTGRES_URL_NON_POOLING` (added by the Vercel ↔ Supabase integration). To do it by hand instead, run
+   [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) in the SQL Editor.
 3. **Authentication → Sign In / Providers → Email**: turn **off** “Allow new users to sign up” (invite only).
    Keep the Email provider enabled.
 4. **Authentication → URL Configuration**:
@@ -37,17 +40,14 @@ Copy `.env.example` to `.env.local` and fill it in (same values go in Vercel →
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase → Project Settings → API |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Publishable key (`sb_publishable_…`) or legacy anon key |
 | `SUPABASE_SECRET_KEY` | Secret key (`sb_secret_…`) or legacy service_role key — **server only** |
-| `NEXT_PUBLIC_SITE_URL` | Your app URL (used in invite emails) |
+| `NEXT_PUBLIC_SITE_URL` | Optional. Your app URL for email links; defaults to the URL the app is visited on |
 | `ADMIN_EMAILS` | Comma-separated preset admin emails |
 
-### 3. Invite the first admin
+### 3. First admin sign-in
 
-```bash
-npm install
-npm run invite-admins   # emails an invite to everyone in ADMIN_EMAILS
-```
-
-Each preset admin clicks the email link, sets a password, and lands on the board. Everyone else is invited
+On the login page, a preset admin chooses **Sign in with an email link instead** and enters their email.
+If they don't have an account yet, an invite is emailed automatically. They open it, set a password, and land
+on the board. (Alternatively run `npm run invite-admins` locally with the keys in `.env.local`.) Everyone else is invited
 from **Admin → Invite someone**.
 
 ### 4. Run locally

@@ -2,7 +2,8 @@
 
 import { refresh } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
-import { isPresetAdmin, siteUrl } from "@/lib/env";
+import { isPresetAdmin } from "@/lib/env";
+import { publicOrigin } from "@/lib/request-origin";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type AdminResult = { ok: true; message?: string } | { ok: false; error: string };
@@ -28,8 +29,8 @@ async function targetEmail(userId: string) {
   return (data.user.email ?? "").toLowerCase();
 }
 
-function inviteRedirect() {
-  return `${siteUrl()}/auth/callback?next=/account/set-password`;
+async function inviteRedirect() {
+  return `${await publicOrigin()}/auth/callback?next=/account/set-password`;
 }
 
 export async function inviteUserAction(input: { email: string; fullName?: string; role?: string }): Promise<AdminResult> {
@@ -42,7 +43,7 @@ export async function inviteUserAction(input: { email: string; fullName?: string
     const admin = createAdminClient();
     const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
       data: fullName ? { full_name: fullName } : undefined,
-      redirectTo: inviteRedirect(),
+      redirectTo: await inviteRedirect(),
     });
     if (error) {
       if (/already/i.test(error.message)) throw new Error(`${email} already has an account.`);
@@ -60,7 +61,7 @@ export async function inviteUserAction(input: { email: string; fullName?: string
 export async function resendInviteAction(userId: string): Promise<AdminResult> {
   return guard(async () => {
     const email = await targetEmail(userId);
-    const { error } = await createAdminClient().auth.admin.inviteUserByEmail(email, { redirectTo: inviteRedirect() });
+    const { error } = await createAdminClient().auth.admin.inviteUserByEmail(email, { redirectTo: await inviteRedirect() });
     if (error) throw new Error(error.message);
     return `Invite re-sent to ${email}.`;
   });

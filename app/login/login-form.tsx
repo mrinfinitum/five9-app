@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { safeNext } from "@/lib/safe-next";
+import { requestPresetAdminInvite } from "./actions";
 import { createClient } from "@/lib/supabase/client";
 
 const ERRORS: Record<string, string> = {
@@ -20,7 +21,7 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(ERRORS[params.get("error") ?? ""] ?? null);
-  const [sent, setSent] = useState(false);
+  const [sent, setSent] = useState<false | "link" | "invite">(false);
 
   // Accounts without access (deactivated / not invited) get signed out so they can retry cleanly.
   useEffect(() => {
@@ -39,6 +40,11 @@ export function LoginForm() {
         router.replace(next);
         router.refresh();
       } else {
+        // Preset admins without an account yet get their invite emailed here.
+        if ((await requestPresetAdminInvite(email)) === "invited") {
+          setSent("invite");
+          return;
+        }
         const { error } = await supabase.auth.signInWithOtp({
           email: email.trim(),
           options: {
@@ -47,14 +53,16 @@ export function LoginForm() {
           },
         });
         if (error) throw error;
-        setSent(true);
+        setSent("link");
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Sign in failed.";
       setError(
         /signups not allowed|not found|otp_disabled/i.test(message)
           ? "We couldn't find an invited account for that email."
-          : message,
+          : /invalid login credentials/i.test(message)
+            ? "Wrong email or password. First time here? Use the email link option below."
+            : message,
       );
     } finally {
       setBusy(false);
@@ -65,7 +73,8 @@ export function LoginForm() {
     return (
       <div className="space-y-4 text-sm">
         <p className="text-neutral-200">
-          Check <strong className="text-white">{email}</strong> for a sign-in link.
+          Check <strong className="text-white">{email}</strong> for{" "}
+          {sent === "invite" ? "your invite. Open it to set your password." : "a sign-in link."}
         </p>
         <button className="btn-ghost w-full" onClick={() => setSent(false)} type="button">
           Use a different email
