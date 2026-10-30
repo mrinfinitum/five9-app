@@ -18,6 +18,11 @@ function fromAddress() {
   return process.env.EMAIL_FROM || "Five9 Media <notifications@five9.media>";
 }
 
+/** True when Resend or SMTP is set up, so the app can deliver email itself. */
+export function emailProviderConfigured() {
+  return Boolean(process.env.RESEND_API_KEY || process.env.SMTP_HOST);
+}
+
 let transport: Transporter | null = null;
 
 function smtpTransport() {

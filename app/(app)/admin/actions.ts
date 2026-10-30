@@ -6,10 +6,20 @@ import { isPresetAdmin } from "@/lib/env";
 import { publicOrigin } from "@/lib/request-origin";
 import { randomUUID } from "node:crypto";
 import { refreshEmailLogo } from "@/lib/requests/email-logo";
+import { sendAuthEmail } from "@/lib/email/auth-emails";
 import { ATTACHMENT_BUCKET, BOARD_LOGO_BUCKET, LOGO_TYPES, MAX_LOGO_BYTES } from "@/lib/requests/constants";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { supabasePublishableKey, supabaseUrl } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
+
+/** Creates the account and emails the invite (from Five9 Media when Resend/SMTP is set up, else via Supabase). */
+async function inviteAndSend(email: string, data: Record<string, unknown>, invitedBy: string): Promise<string> {
+  const result = await sendAuthEmail("invite", email, { data, invitedBy });
+  if (result.sent) return result.userId;
+  const { data: invited, error } = await createAdminClient().auth.admin.inviteUserByEmail(email, { data, redirectTo: await inviteRedirect() });
+  if (error) throw error;
+  return invited.user.id;
+}
 
 export type AdminResult = { ok: true; message?: string } | { ok: false; error: string };
 
@@ -73,24 +83,25 @@ export async function inviteUserAction(input: {
     const boardIds = role === "admin" ? [] : [...new Set(input.boardIds ?? [])];
 
     const admin = createAdminClient();
-    const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
-      data: await inviteDetails({ fullName, invitedBy: actorName, role, boardIds }),
-      redirectTo: await inviteRedirect(),
-    });
-    if (error) {
-      if (/already/i.test(error.message)) throw new Error(`${email} already has an account.`);
-      throw new Error(error.message);
+    const details = await inviteDetails({ fullName, invitedBy: actorName, role, boardIds });
+    let userId: string;
+    try {
+      userId = await inviteAndSend(email, details, actorName);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/already/i.test(message)) throw new Error(`${email} already has an account.`);
+      throw new Error(message);
     }
 
     const { error: profileError } = await admin
       .from("profiles")
-      .upsert({ id: data.user.id, email, full_name: fullName ?? null, role, is_active: true }, { onConflict: "id" });
+      .upsert({ id: userId, email, full_name: fullName ?? null, role, is_active: true }, { onConflict: "id" });
     if (profileError) throw new Error(profileError.message);
 
     if (boardIds.length) {
       const { error: accessError } = await admin
         .from("board_members")
-        .upsert(boardIds.map((boardId) => ({ board_id: boardId, user_id: data.user.id })));
+        .upsert(boardIds.map((boardId) => ({ board_id: boardId, user_id: userId })));
       if (accessError) throw new Error(accessError.message);
     }
     return `Invite sent to ${email}.`;
@@ -112,9 +123,15 @@ export async function resendInviteAction(userId: string): Promise<AdminResult> {
       role: profile?.role === "admin" ? "admin" : "member",
       boardIds: (memberships ?? []).map((m) => m.board_id),
     });
-    const { error } = await admin.auth.admin.inviteUserByEmail(email, { data, redirectTo });
-    if (!error) return `Invite re-sent to ${email}.`;
-    if (!/already/i.test(error.message)) throw new Error(error.message);
+    try {
+      await inviteAndSend(email, data, actorName);
+      return `Invite re-sent to ${email}.`;
+    } catch (error) {
+      if (!/already/i.test(error instanceof Error ? error.message : String(error))) throw error;
+    }
+    if ((await sendAuthEmail("recovery", email)).sent) {
+      return `Sign-in link sent to ${email} — they'll set a password and land on their boards.`;
+    }
 
     // Accounts created without an invite (e.g. by the monday.com import) can't be
     // re-invited; send a "set your password" link instead, which works the same way.

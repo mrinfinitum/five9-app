@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { safeNext } from "@/lib/safe-next";
-import { requestPresetAdminInvite } from "./actions";
+import { requestAuthEmail, requestPresetAdminInvite } from "./actions";
 import { createClient } from "@/lib/supabase/client";
 
 const ERRORS: Record<string, string> = {
@@ -43,6 +43,10 @@ export function LoginForm() {
         // Preset admins without an account yet get their invite emailed here.
         if ((await requestPresetAdminInvite(email)) === "invited") {
           setSent("invite");
+          return;
+        }
+        if (await requestAuthEmail("magiclink", email, next)) {
+          setSent("link");
           return;
         }
         const { error } = await supabase.auth.signInWithOtp({

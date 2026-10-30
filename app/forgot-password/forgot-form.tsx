@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { requestAuthEmail } from "@/app/login/actions";
 import { createClient } from "@/lib/supabase/client";
 
 export function ForgotForm() {
@@ -14,12 +15,21 @@ export function ForgotForm() {
     event.preventDefault();
     setBusy(true);
     setError(null);
-    const { error } = await createClient().auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}/auth/callback?next=/account/set-password`,
-    });
-    setBusy(false);
-    if (error) setError(error.message);
-    else setDone(true);
+    try {
+      if (await requestAuthEmail("recovery", email)) {
+        setDone(true);
+        return;
+      }
+      const { error } = await createClient().auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/auth/callback?next=/account/set-password`,
+      });
+      if (error) throw error;
+      setDone(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't send the link.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (done) {
