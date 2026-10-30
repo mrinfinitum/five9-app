@@ -5,14 +5,15 @@ import { useCallback, useState } from "react";
 import type { Board } from "@/lib/requests/types";
 
 /**
- * Logo sizes. Logos are scaled to roughly the same *area* rather than the same
- * height, so wide wordmarks (e.g. NORTHWESTERN) don't dwarf square crests: each
- * logo gets height = sqrt(area / aspect ratio), kept within maxHeight × maxWidth.
+ * Logo sizes. Wide wordmarks would tower over square crests at the same
+ * height, and look tiny at the same area, so height eases down gently as a
+ * logo gets wider: height = maxHeight × (refAspect / aspect)^0.4, capped at
+ * maxHeight and maxWidth. Square-ish logos use the full height.
  */
 const SIZES = {
-  sm: { maxHeight: 36, maxWidth: 130, area: 36 * 36 * 1.4 },
-  md: { maxHeight: 56, maxWidth: 200, area: 56 * 56 * 1.4 },
-  lg: { maxHeight: 76, maxWidth: 260, area: 76 * 76 * 1.4 },
+  sm: { maxHeight: 36, maxWidth: 170, refAspect: 2.2 },
+  md: { maxHeight: 56, maxWidth: 280, refAspect: 2.2 },
+  lg: { maxHeight: 76, maxWidth: 340, refAspect: 2.2 },
 } as const;
 
 type Fit = (typeof SIZES)[keyof typeof SIZES];
@@ -20,7 +21,7 @@ type Fit = (typeof SIZES)[keyof typeof SIZES];
 type LogoBoard = Pick<Board, "name" | "logoDarkUrl" | "logoLightUrl" | "logoDarkTint" | "logoLightTint">;
 
 function fitSize(aspect: number, fit: Fit) {
-  let height = Math.min(fit.maxHeight, Math.sqrt(fit.area / aspect));
+  let height = fit.maxHeight * Math.min(1, Math.pow(fit.refAspect / aspect, 0.4));
   if (height * aspect > fit.maxWidth) height = fit.maxWidth / aspect;
   return { width: Math.round(height * aspect), height: Math.round(height) };
 }
