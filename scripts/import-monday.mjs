@@ -7,6 +7,8 @@ import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 
 const APPLY = process.argv.includes("--apply");
+// Boards deleted in the app are skipped unless you ask for them back with --create-boards.
+const CREATE_BOARDS = process.argv.includes("--create-boards");
 const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SECRET_KEY, { auth: { persistSession: false } });
 const monday = async (query) => {
   const r = await fetch("https://api.monday.com/v2", { method: "POST", headers: { Authorization: process.env.MONDAY_API_TOKEN, "Content-Type": "application/json", "API-Version": "2024-10" }, body: JSON.stringify({ query }) });
@@ -90,7 +92,7 @@ const personIds = (item) => {
   try { return (JSON.parse(c.value).personsAndTeams ?? []).filter((p) => p.kind === "person").map((p) => String(p.id)); } catch { return []; }
 };
 
-const boardsData = await loadBoards();
+const boardsData = (await loadBoards());
 const mondayUsers = (await monday(`{ users(limit: 200) { id name email } }`)).users;
 
 // ---- People ---------------------------------------------------------------
@@ -115,8 +117,12 @@ const userFor = (email) => (email ? profileByEmail.get(email.toLowerCase()) ?? n
 // ---- Boards & types ---------------------------------------------------------
 const boards = must(await sb.from("boards").select("id, slug"));
 const boardBySlug = new Map(boards.map((b) => [b.slug, b.id]));
-for (const target of Object.values(BOARD_BY_WORKSPACE)) {
+for (const [workspace, target] of Object.entries(BOARD_BY_WORKSPACE)) {
   if (boardBySlug.has(target.slug)) continue;
+  if (!CREATE_BOARDS) {
+    console.log(`Skipping ${workspace}: no "${target.name}" board (run with --create-boards to recreate it).`);
+    continue;
+  }
   plan.createBoards.push(target.name);
   if (APPLY) boardBySlug.set(target.slug, must(await sb.from("boards").insert({ name: target.name, slug: target.slug }).select("id").single()).id);
   else boardBySlug.set(target.slug, `new:${target.slug}`);
@@ -128,6 +134,10 @@ for (const t of Object.values(TYPE_BY_SUBBOARD)) {
   plan.createTypes.push(t.name);
   if (APPLY) must(await sb.from("request_types").insert({ key: t.key, name: t.name, sort_order: 5 }));
 }
+
+const importable = boardsData.filter((b) => boardBySlug.has(BOARD_BY_WORKSPACE[b.workspace].slug));
+boardsData.length = 0;
+boardsData.push(...importable);
 
 // ---- Board access: team for PGA Memes staff where they appear; Chelsea requester on UpSwing ----
 const accessWanted = new Map(); // `${boardId}|${userId}` → access
