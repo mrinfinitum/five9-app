@@ -24,7 +24,7 @@ export default function AnalyticsPage({ params }: PageProps<"/b/[slug]/analytics
 async function AnalyticsLoader({ params }: { params: Promise<{ slug: string }> }) {
   const [{ slug }] = await Promise.all([params, requireUser()]);
   const context = await getBoardContext(slug);
-  if (!context || context.access !== "team") notFound();
+  if (!context) notFound();
   const { board } = context;
   const [data, pulse] = await Promise.all([getBoardAnalytics(board.id), getSatisfactionPulse(board.id)]);
 

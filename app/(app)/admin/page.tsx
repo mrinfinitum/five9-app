@@ -35,7 +35,7 @@ async function AdminLoader() {
     admin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
     admin.from("profiles").select("id, email, full_name, role, is_active"),
     admin.from("boards").select("id, name, slug, description, logo_path, logo_light_path, logo_dark_tint, logo_light_tint, email_logo_path, created_at").order("name"),
-    admin.from("board_members").select("board_id, user_id, access"),
+    admin.from("board_members").select("board_id, user_id"),
     admin.from("requests").select("board_id"),
   ]);
   const missing = [profilesResult.error, boardsResult.error].find((e) => e && (e.code === "42P01" || e.code === "PGRST205"));
@@ -46,11 +46,9 @@ async function AdminLoader() {
   if (usersResult.error) throw new Error(usersResult.error.message);
 
   const profileById = new Map((profilesResult.data ?? []).map((p) => [p.id, p]));
-  const accessByUser = new Map<string, Record<string, "team" | "requester">>();
+  const boardsByUser = new Map<string, string[]>();
   for (const m of membersResult.data ?? []) {
-    const entry = accessByUser.get(m.user_id) ?? {};
-    entry[m.board_id] = m.access as "team" | "requester";
-    accessByUser.set(m.user_id, entry);
+    boardsByUser.set(m.user_id, [...(boardsByUser.get(m.user_id) ?? []), m.board_id]);
   }
 
   const users: AdminUserRow[] = usersResult.data.users.map((user) => {
@@ -67,7 +65,7 @@ async function AdminLoader() {
       isSelf: user.id === actor.id,
       invitedPending: !user.last_sign_in_at,
       lastSignInAt: user.last_sign_in_at ?? null,
-      access: accessByUser.get(user.id) ?? {},
+      boardIds: boardsByUser.get(user.id) ?? [],
     };
   });
   users.sort((a, b) => Number(b.role === "admin") - Number(a.role === "admin") || a.email.localeCompare(b.email));

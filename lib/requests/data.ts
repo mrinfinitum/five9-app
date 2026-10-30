@@ -1,7 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { boardLogoUrl, requestCode } from "./constants";
-import type { Board, BoardAccess, Person, RequestItem, RequestType } from "./types";
+import type { Board, Person, RequestItem, RequestType } from "./types";
 
 type Row = Record<string, unknown>;
 
@@ -152,43 +152,31 @@ export function mapBoard(row: BoardRow): Board {
   };
 }
 
-/** Boards the signed-in user can open, with their access level on each. */
-export async function listMyBoards(userId: string, isAdmin: boolean): Promise<(Board & { access: BoardAccess })[]> {
+/** Boards the signed-in user can open (row-level security limits this to their boards; admins see all). */
+export async function listMyBoards(): Promise<Board[]> {
   const supabase = await createClient();
-  const [{ data: boards, error }, { data: memberships, error: membershipError }] = await Promise.all([
-    supabase.from("boards").select(BOARD_SELECT).order("name"),
-    supabase.from("board_members").select("board_id, access").eq("user_id", userId),
-  ]);
+  const { data: boards, error } = await supabase.from("boards").select(BOARD_SELECT).order("name");
   check(error);
-  check(membershipError);
-  const accessByBoard = new Map((memberships ?? []).map((m) => [m.board_id, m.access as BoardAccess]));
-  return (boards ?? []).map((board) => ({
-    ...mapBoard(board),
-    access: isAdmin ? "team" : (accessByBoard.get(board.id) ?? "requester"),
-  }));
+  return (boards ?? []).map(mapBoard);
 }
 
-/** A board by its URL slug plus the signed-in user's access, or null when they can't see it. */
-export async function getBoardContext(slug: string): Promise<{ board: Board; access: BoardAccess } | null> {
+/** A board by its URL slug, or null when the signed-in user isn't a member (admins are members of every board). */
+export async function getBoardContext(slug: string): Promise<{ board: Board } | null> {
   const supabase = await createClient();
   const { data: board, error } = await supabase.from("boards").select(BOARD_SELECT).eq("slug", slug).maybeSingle();
   check(error);
   if (!board) return null;
   const { data: access, error: accessError } = await supabase.rpc("board_access", { target_board: board.id });
   check(accessError);
-  if (access !== "team" && access !== "requester") return null;
-  return { board: mapBoard(board), access };
+  if (!access) return null;
+  return { board: mapBoard(board) };
 }
 
-/** Board access in one query: `team` = admins + team members; `requesters` = everyone with access. */
-export async function listBoardPeople(boardId: string, people: Person[]): Promise<{ team: Person[]; requesters: Person[] }> {
+/** Everyone who can work a board: admins plus its active members. */
+export async function listBoardPeople(boardId: string, people: Person[]): Promise<Person[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase.from("board_members").select("user_id, access").eq("board_id", boardId);
+  const { data, error } = await supabase.from("board_members").select("user_id").eq("board_id", boardId);
   check(error);
-  const access = new Map((data ?? []).map((m) => [m.user_id, m.access]));
-  const active = people.filter((person) => person.isActive);
-  return {
-    team: active.filter((person) => person.role === "admin" || access.get(person.id) === "team"),
-    requesters: active.filter((person) => person.role === "admin" || access.has(person.id)),
-  };
+  const members = new Set((data ?? []).map((m) => m.user_id));
+  return people.filter((person) => person.isActive && (person.role === "admin" || members.has(person.id)));
 }

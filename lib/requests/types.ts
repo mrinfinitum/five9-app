@@ -9,8 +9,6 @@ export type Person = {
   isActive: boolean;
 };
 
-export type BoardAccess = "team" | "requester";
-
 export type Board = {
   id: string;
   name: string;

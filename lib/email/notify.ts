@@ -70,12 +70,12 @@ async function deliver(event: RequestEvent, origin: string) {
   const actor = byId.get(event.actorId);
   const { data: actorMembership } = await admin
     .from("board_members")
-    .select("access")
+    .select("user_id")
     .eq("board_id", request.board_id)
     .eq("user_id", event.actorId)
     .maybeSingle();
-  // The board team (admins + team members) vs. the person who asked.
-  const actorIsTeam = actor?.role === "admin" || actorMembership?.access === "team";
+  // The board team (admins + board members) vs. the person who asked.
+  const actorIsTeam = actor?.role === "admin" || Boolean(actorMembership);
   const board = (Array.isArray(request.boards) ? request.boards[0] : request.boards) as {
     slug: string;
     name: string;

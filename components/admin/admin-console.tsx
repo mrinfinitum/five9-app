@@ -18,14 +18,11 @@ import {
   setRoleAction,
   updateBoardAction,
   type AdminResult,
-  type BoardGrant,
 } from "@/app/(app)/admin/actions";
 import { LogoImage } from "@/components/board-logo";
 import { ConfirmDialog, Dialog } from "@/components/ui/dialog";
 import { BOARD_LOGO_BUCKET, LOGO_TYPES, MAX_LOGO_BYTES } from "@/lib/requests/constants";
 import { createClient } from "@/lib/supabase/client";
-
-type Access = "team" | "requester";
 
 export type AdminUserRow = {
   id: string;
@@ -37,8 +34,8 @@ export type AdminUserRow = {
   isSelf: boolean;
   invitedPending: boolean;
   lastSignInAt: string | null;
-  /** boardId → access */
-  access: Record<string, Access>;
+  /** Boards this person is a member of (admins see every board regardless). */
+  boardIds: string[];
 };
 
 export type AdminBoardRow = {
@@ -54,8 +51,6 @@ export type AdminBoardRow = {
   emailLogoUrl: string | null;
   requestCount: number;
 };
-
-const ACCESS_LABEL: Record<Access | "none", string> = { none: "No access", team: "Team", requester: "Requester" };
 
 function formatWhen(value: string | null) {
   if (!value) return "Never";
@@ -192,7 +187,6 @@ function UsersTab({
             <tbody className="block md:table-row-group">
               {users.map((row) => {
                 const locked = row.isPreset || row.isSelf;
-                const grants = Object.entries(row.access);
                 return (
                   <tr className={`flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line px-4 py-3 align-top md:table-row md:p-0 ${row.isActive ? "" : "opacity-60"}`} key={row.id}>
                     <td className="w-full md:table-cell md:w-auto md:px-4 md:py-3">
@@ -241,10 +235,10 @@ function UsersTab({
                         <span className="text-xs text-muted">All boards</span>
                       ) : (
                         <div className="flex max-w-72 flex-wrap items-center gap-1">
-                          {grants.length ? (
-                            grants.map(([boardId, access]) => (
+                          {row.boardIds.length ? (
+                            row.boardIds.map((boardId) => (
                               <span className="rounded-full bg-panel-2 px-2 py-0.5 text-[0.7rem] text-neutral-300" key={boardId}>
-                                {boardName.get(boardId) ?? "Board"} · <span className={access === "team" ? "text-brand" : "text-muted"}>{ACCESS_LABEL[access]}</span>
+                                {boardName.get(boardId) ?? "Board"}
                               </span>
                             ))
                           ) : (
@@ -288,25 +282,21 @@ function UsersTab({
       </section>
 
       {accessFor ? (
-        <Dialog onClose={() => setAccessFor(null)} size="sm" title={`Board access for ${accessFor.name ?? accessFor.email}`}>
+        <Dialog onClose={() => setAccessFor(null)} size="sm" title={`Boards for ${accessFor.name ?? accessFor.email}`}>
           <div className="space-y-2 p-5">
-            <p className="text-xs text-muted">
-              <strong className="text-neutral-300">Team</strong> works the board. <strong className="text-neutral-300">Requester</strong> submits requests and
-              follows their own.
-            </p>
+            <p className="text-xs text-muted">Members have full control of their boards.</p>
             {boards.length ? (
               boards.map((board) => (
-                <label className="flex items-center gap-3 rounded-lg bg-panel-2 px-3 py-2" key={board.id}>
-                  <span className="min-w-0 flex-1 truncate text-sm text-white">{board.name}</span>
-                  <AccessSelect
-                    disabled={pending}
-                    onChange={(access) => {
-                      run(() => setBoardAccessAction(board.id, accessFor.id, access));
-                      setAccessFor({ ...accessFor, access: withAccess(accessFor.access, board.id, access) });
-                    }}
-                    value={accessFor.access[board.id] ?? null}
-                  />
-                </label>
+                <MemberCheckbox
+                  checked={accessFor.boardIds.includes(board.id)}
+                  disabled={pending}
+                  key={board.id}
+                  label={board.name}
+                  onChange={(member) => {
+                    run(() => setBoardAccessAction(board.id, accessFor.id, member));
+                    setAccessFor({ ...accessFor, boardIds: toggled(accessFor.boardIds, board.id, member) });
+                  }}
+                />
               ))
             ) : (
               <p className="text-sm text-muted">Create a board first.</p>
@@ -333,26 +323,31 @@ function UsersTab({
   );
 }
 
-function withAccess(current: Record<string, Access>, boardId: string, access: Access | null) {
-  const next = { ...current };
-  if (access) next[boardId] = access;
-  else delete next[boardId];
-  return next;
+function toggled(ids: string[], id: string, on: boolean) {
+  return on ? [...new Set([...ids, id])] : ids.filter((x) => x !== id);
 }
 
-function AccessSelect({ value, onChange, disabled }: { value: Access | null; onChange: (access: Access | null) => void; disabled?: boolean }) {
+function MemberCheckbox({
+  label,
+  detail,
+  checked,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  detail?: string | null;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  disabled?: boolean;
+}) {
   return (
-    <select
-      aria-label="Board access"
-      className="rounded border border-line bg-ink px-2 py-1 text-xs text-neutral-200"
-      disabled={disabled}
-      onChange={(e) => onChange((e.target.value || null) as Access | null)}
-      value={value ?? ""}
-    >
-      <option value="">No access</option>
-      <option value="team">Team</option>
-      <option value="requester">Requester</option>
-    </select>
+    <label className="flex cursor-pointer items-center gap-3 rounded-lg bg-panel-2 px-3 py-2">
+      <input checked={checked} className="h-4 w-4 shrink-0 accent-brand" disabled={disabled} onChange={(e) => onChange(e.target.checked)} type="checkbox" />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm text-white">{label}</span>
+        {detail ? <span className="block truncate text-xs text-muted">{detail}</span> : null}
+      </span>
+    </label>
   );
 }
 
@@ -362,13 +357,13 @@ function InviteForm({
   disabled,
 }: {
   boards: AdminBoardRow[];
-  onInvite: (input: { email: string; fullName: string; role: string; boards: BoardGrant[] }) => void;
+  onInvite: (input: { email: string; fullName: string; role: string; boardIds: string[] }) => void;
   disabled: boolean;
 }) {
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [role, setRole] = useState("member");
-  const [access, setAccess] = useState<Record<string, Access>>({});
+  const [boardIds, setBoardIds] = useState<string[]>([]);
 
   return (
     <section className="card p-4">
@@ -383,12 +378,12 @@ function InviteForm({
             email,
             fullName,
             role,
-            boards: role === "admin" ? [] : Object.entries(access).map(([boardId, a]) => ({ boardId, access: a })),
+            boardIds: role === "admin" ? [] : boardIds,
           });
           setEmail("");
           setFullName("");
           setRole("member");
-          setAccess({});
+          setBoardIds([]);
         }}
       >
         <div className="grid gap-2 sm:grid-cols-[1fr_1fr_9rem_auto]">
@@ -403,17 +398,16 @@ function InviteForm({
         {role === "member" ? (
           boards.length ? (
             <div>
-              <span className="label">Board access</span>
-              <p className="mb-2 text-xs text-muted">
-                <strong className="text-neutral-300">Team</strong> works the board: sees every request, moves cards, assigns, posts
-                internal notes. <strong className="text-neutral-300">Requester</strong> only submits requests and follows their own.
-              </p>
+              <span className="label">Boards</span>
+              <p className="mb-2 text-xs text-muted">Tick the boards they&apos;re a member of. Members have full control of those boards.</p>
               <div className="grid gap-2 sm:grid-cols-2">
                 {boards.map((board) => (
-                  <label className="flex items-center gap-3 rounded-lg bg-panel-2 px-3 py-2" key={board.id}>
-                    <span className="min-w-0 flex-1 truncate text-sm text-white">{board.name}</span>
-                    <AccessSelect onChange={(a) => setAccess((current) => withAccess(current, board.id, a))} value={access[board.id] ?? null} />
-                  </label>
+                  <MemberCheckbox
+                    checked={boardIds.includes(board.id)}
+                    key={board.id}
+                    label={board.name}
+                    onChange={(member) => setBoardIds((current) => toggled(current, board.id, member))}
+                  />
                 ))}
               </div>
             </div>
@@ -439,9 +433,9 @@ function BoardsTab({ boards, users, pending, run }: { boards: AdminBoardRow[]; u
   const [membersFor, setMembersFor] = useState<AdminBoardRow | null>(null);
   const [deleting, setDeleting] = useState<AdminBoardRow | null>(null);
   const [confirmText, setConfirmText] = useState("");
-  const [localAccess, setLocalAccess] = useState<Record<string, Record<string, Access>>>({});
+  const [localBoards, setLocalBoards] = useState<Record<string, string[]>>({});
   const members = users.filter((u) => u.role !== "admin");
-  const accessOf = (user: AdminUserRow, boardId: string) => (localAccess[user.id] ?? user.access)[boardId] ?? null;
+  const isMember = (user: AdminUserRow, boardId: string) => (localBoards[user.id] ?? user.boardIds).includes(boardId);
 
   return (
     <div className="space-y-6">
@@ -467,8 +461,7 @@ function BoardsTab({ boards, users, pending, run }: { boards: AdminBoardRow[]; u
       <section className="space-y-3">
         {boards.length ? (
           boards.map((board) => {
-            const team = members.filter((u) => accessOf(u, board.id) === "team").length;
-            const requesters = members.filter((u) => accessOf(u, board.id) === "requester").length;
+            const memberCount = members.filter((u) => isMember(u, board.id)).length;
             return (
               <article className="card p-4" key={board.id}>
                 <div className="flex flex-col gap-4 md:flex-row md:items-start">
@@ -500,8 +493,8 @@ function BoardsTab({ boards, users, pending, run }: { boards: AdminBoardRow[]; u
                       placeholder="Add a description"
                     />
                     <p className="text-xs text-muted">
-                      Link: /b/{board.slug} (stays the same if you rename) · {board.requestCount} request{board.requestCount === 1 ? "" : "s"} · {team} team · {requesters} requester
-                      {requesters === 1 ? "" : "s"} · admins see all boards
+                      Link: /b/{board.slug} (stays the same if you rename) · {board.requestCount} request{board.requestCount === 1 ? "" : "s"} · {memberCount} member
+                      {memberCount === 1 ? "" : "s"} · admins see all boards
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
@@ -509,7 +502,7 @@ function BoardsTab({ boards, users, pending, run }: { boards: AdminBoardRow[]; u
                       <ExternalLink className="h-3.5 w-3.5" /> Open
                     </Link>
                     <button className="btn-ghost px-2.5 py-1.5 text-xs" onClick={() => setMembersFor(board)} type="button">
-                      <Users className="h-3.5 w-3.5" /> Manage access
+                      <Users className="h-3.5 w-3.5" /> Members
                     </button>
                     <button
                       className="btn-danger px-2.5 py-1.5 text-xs"
@@ -532,28 +525,22 @@ function BoardsTab({ boards, users, pending, run }: { boards: AdminBoardRow[]; u
       </section>
 
       {membersFor ? (
-        <Dialog onClose={() => setMembersFor(null)} size="sm" title={`Access to ${membersFor.name}`}>
+        <Dialog onClose={() => setMembersFor(null)} size="sm" title={`Members of ${membersFor.name}`}>
           <div className="space-y-2 p-5">
-            <p className="text-xs text-muted">
-              <strong className="text-neutral-300">Team</strong> works the board. <strong className="text-neutral-300">Requester</strong> submits requests and
-              follows their own. Admins always have access.
-            </p>
+            <p className="text-xs text-muted">Members have full control of this board. Admins always have access.</p>
             {members.length ? (
               members.map((user) => (
-                <label className="flex items-center gap-3 rounded-lg bg-panel-2 px-3 py-2" key={user.id}>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm text-white">{user.name ?? user.email}</span>
-                    {user.name ? <span className="block truncate text-xs text-muted">{user.email}</span> : null}
-                  </span>
-                  <AccessSelect
-                    disabled={pending}
-                    onChange={(access) => {
-                      setLocalAccess((current) => ({ ...current, [user.id]: withAccess(current[user.id] ?? user.access, membersFor.id, access) }));
-                      run(() => setBoardAccessAction(membersFor.id, user.id, access));
-                    }}
-                    value={accessOf(user, membersFor.id)}
-                  />
-                </label>
+                <MemberCheckbox
+                  checked={isMember(user, membersFor.id)}
+                  detail={user.name ? user.email : null}
+                  disabled={pending}
+                  key={user.id}
+                  label={user.name ?? user.email}
+                  onChange={(member) => {
+                    setLocalBoards((current) => ({ ...current, [user.id]: toggled(current[user.id] ?? user.boardIds, membersFor.id, member) }));
+                    run(() => setBoardAccessAction(membersFor.id, user.id, member));
+                  }}
+                />
               ))
             ) : (
               <p className="text-sm text-muted">Invite members from the Users tab first.</p>

@@ -50,7 +50,7 @@ export function PersonCard({
           <Avatar person={person} size="lg" />
           <div className="min-w-0">
             <span className="text-[0.65rem] font-bold uppercase tracking-widest text-brand">
-              {person.role === "admin" ? "Admin" : isTeam ? "Team member" : "Requester"}
+              {person.role === "admin" ? "Admin" : isTeam ? "Board member" : "Not on this board"}
             </span>
             <h2 className="truncate text-lg font-bold text-white">{person.name}</h2>
             <a className="inline-flex items-center gap-1 text-sm text-muted hover:text-white" href={`mailto:${person.email}`}>

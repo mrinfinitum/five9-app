@@ -295,7 +295,7 @@ export async function createRequestTypeAction(name: string): Promise<ActionResul
       return { ok: true, key: existing.key, name: existing.name };
     }
     const { error } = await supabase.from("request_types").insert({ key, name: clean, sort_order: 500 });
-    check(error, error?.code === "42501" ? "Only team members can add categories." : undefined);
+    check(error, error?.code === "42501" ? "Only board members can add categories." : undefined);
     refresh();
     return { ok: true, key, name: clean };
   } catch (error) {

@@ -1,12 +1,10 @@
-import { ChartNoAxesCombined, KanbanSquare, Megaphone } from "lucide-react";
+import { ChartNoAxesCombined, KanbanSquare } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { BoardLogo } from "@/components/board-logo";
-import { hasBoardLogo } from "@/lib/requests/logos";
 import { BoardName } from "@/components/board-name";
 import { RequestBoard } from "@/components/requests/board";
-import { RequesterPortal } from "@/components/requests/portal";
 import { SetupNotice } from "@/components/setup-notice";
 import { requireUser } from "@/lib/auth";
 import {
@@ -39,35 +37,7 @@ async function BoardLoader({ params }: { params: Promise<{ slug: string }> }) {
     throw error;
   }
   if (!context) notFound();
-  const { board, access } = context;
-
-  if (access === "requester") {
-    const [requests, people, requestTypes] = await Promise.all([
-      listRequests(board.id, { requesterId: user.id }),
-      listPeople(),
-      listRequestTypes(),
-    ]);
-    return (
-      <>
-        <header className="mb-6">
-          {hasBoardLogo(board) ? (
-            <div className="mb-4">
-              <BoardLogo board={board} size="lg" />
-            </div>
-          ) : null}
-          <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.25em] text-brand">
-            <Megaphone className="h-3.5 w-3.5" /> <BoardName boardId={board.id} canEdit={user.isAdmin} name={board.name} />
-          </div>
-          <h1 className="mt-1 text-3xl font-black tracking-tight text-white">Tell us what you need</h1>
-          <p className="mt-2 max-w-2xl text-sm text-muted">
-            Submit a request for video, photo, design, social, web, or campaign work — then follow its progress from intake to
-            delivery right here.
-          </p>
-        </header>
-        <RequesterPortal board={board} currentUserId={user.id} people={people} requestTypes={requestTypes} requests={requests} />
-      </>
-    );
-  }
+  const { board } = context;
 
   const [active, archived, people, requestTypes] = await Promise.all([
     listRequests(board.id, { activeOnly: true }),
@@ -76,7 +46,7 @@ async function BoardLoader({ params }: { params: Promise<{ slug: string }> }) {
     listRequestTypes(),
   ]);
   const requests = [...active, ...archived];
-  const { team, requesters: requesterOptions } = await listBoardPeople(board.id, people);
+  const team = await listBoardPeople(board.id, people);
 
   return (
     <>
@@ -88,7 +58,7 @@ async function BoardLoader({ params }: { params: Promise<{ slug: string }> }) {
           </div>
           <h1 className="mt-1 text-3xl font-black tracking-tight text-white">Request pipeline</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted">
-            Every request on this board. Drag cards between columns to update status — requesters see the change in their thread
+            Every request on this board. Drag cards between columns to update status — everyone on the board sees the change
             instantly.
           </p>
         </div>
@@ -101,7 +71,7 @@ async function BoardLoader({ params }: { params: Promise<{ slug: string }> }) {
         currentUser={{ id: user.id, isAdmin: user.isAdmin }}
         people={people}
         requestTypes={requestTypes}
-        requesterOptions={requesterOptions}
+        requesterOptions={team}
         requests={requests}
         team={team}
       />

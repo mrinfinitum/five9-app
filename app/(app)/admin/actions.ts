@@ -38,13 +38,12 @@ async function inviteRedirect() {
   return `${await publicOrigin()}/auth/callback?next=/account/set-password`;
 }
 
-export type BoardGrant = { boardId: string; access: "team" | "requester" };
-
 export async function inviteUserAction(input: {
   email: string;
   fullName?: string;
   role?: string;
-  boards?: BoardGrant[];
+  /** Boards the new member can use (ignored for admins, who see every board). */
+  boardIds?: string[];
 }): Promise<AdminResult> {
   return guard(async () => {
     const email = input.email.trim().toLowerCase();
@@ -67,11 +66,11 @@ export async function inviteUserAction(input: {
       .upsert({ id: data.user.id, email, full_name: fullName ?? null, role, is_active: true }, { onConflict: "id" });
     if (profileError) throw new Error(profileError.message);
 
-    const grants = (input.boards ?? []).filter((g) => g.access === "team" || g.access === "requester");
-    if (grants.length) {
+    const boardIds = role === "admin" ? [] : [...new Set(input.boardIds ?? [])];
+    if (boardIds.length) {
       const { error: accessError } = await admin
         .from("board_members")
-        .upsert(grants.map((g) => ({ board_id: g.boardId, user_id: data.user.id, access: g.access })));
+        .upsert(boardIds.map((boardId) => ({ board_id: boardId, user_id: data.user.id })));
       if (accessError) throw new Error(accessError.message);
     }
     return `Invite sent to ${email}.`;
@@ -142,12 +141,12 @@ export async function deleteUserAction(userId: string): Promise<AdminResult> {
 // Board access
 // ---------------------------------------------------------------------------
 
-/** Gives a user team/requester access to a board, or removes it (access = null). */
-export async function setBoardAccessAction(boardId: string, userId: string, access: "team" | "requester" | null): Promise<AdminResult> {
+/** Makes a user a member of a board, or removes them. Members have full control of the board. */
+export async function setBoardAccessAction(boardId: string, userId: string, member: boolean): Promise<AdminResult> {
   return guard(async () => {
     const admin = createAdminClient();
-    const { error } = access
-      ? await admin.from("board_members").upsert({ board_id: boardId, user_id: userId, access })
+    const { error } = member
+      ? await admin.from("board_members").upsert({ board_id: boardId, user_id: userId })
       : await admin.from("board_members").delete().eq("board_id", boardId).eq("user_id", userId);
     if (error) throw new Error(error.message);
   });
