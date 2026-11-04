@@ -1080,12 +1080,14 @@ export function RequestBoard({ board, requests, team, people, requesterOptions, 
         <Dialog onClose={() => setCreating(false)} title="New request">
           <div className="p-5">
             <RequestForm
+              assigneeOptions={team}
               boardId={board.id}
               currentUserId={currentUser.id}
               onCancel={() => setCreating(false)}
               onCreated={(created) => {
                 setCreating(false);
-                if (created.failedUploads.length) setToast(`Some files didn't upload (${created.failedUploads.join(", ")}). Re-attach them from the request.`);
+                if (created.assignError) setToast(created.assignError);
+                else if (created.failedUploads.length) setToast(`Some files didn't upload (${created.failedUploads.join(", ")}). Re-attach them from the request.`);
                 else setNotice(`Request ${created.code} created.`);
               }}
               requestTypes={types}

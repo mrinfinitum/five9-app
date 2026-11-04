@@ -67,9 +67,11 @@ export type SubmitRequestInput = {
   description?: string;
   /** Team only: create the request on someone else's behalf. */
   requesterId?: string;
+  /** Team only: assign teammates as the request is created. */
+  assigneeIds?: string[];
 };
 
-export async function submitRequestAction(input: SubmitRequestInput): Promise<ActionResult<{ id: string; code: string }>> {
+export async function submitRequestAction(input: SubmitRequestInput): Promise<ActionResult<{ id: string; code: string; assignError?: string }>> {
   try {
     const { user, supabase } = await context();
     const title = text(input.title, 160);
@@ -107,7 +109,26 @@ export async function submitRequestAction(input: SubmitRequestInput): Promise<Ac
       .single();
     check(error, error?.code === "42501" ? "You don't have access to submit requests on this board." : undefined);
 
-    notify({ kind: "created", requestId: data!.id, actorId: user.id }, await publicOrigin());
+    const origin = await publicOrigin();
+    notify({ kind: "created", requestId: data!.id, actorId: user.id }, origin);
+
+    // The request exists either way; a failed assignment is reported, not rolled back.
+    const assigneeIds = canWork ? [...new Set((input.assigneeIds ?? []).filter((id) => typeof id === "string" && id))] : [];
+    if (assigneeIds.length) {
+      const { error: assignError } = await supabase
+        .from("request_assignees")
+        .insert(assigneeIds.map((userId) => ({ request_id: data!.id, user_id: userId, assigned_by: user.id })));
+      if (assignError) {
+        refresh();
+        return {
+          ok: true,
+          id: data!.id as string,
+          code: requestCode(data!.number as number),
+          assignError: "The request was created, but assigning teammates failed. Assign them from the request.",
+        };
+      }
+      for (const assigneeId of assigneeIds) notify({ kind: "assigned", requestId: data!.id, actorId: user.id, assigneeId }, origin);
+    }
     refresh();
     return { ok: true, id: data!.id as string, code: requestCode(data!.number as number) };
   } catch (error) {

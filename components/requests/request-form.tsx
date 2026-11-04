@@ -1,19 +1,20 @@
 "use client";
 
-import { Paperclip, Send, UserRound, X } from "lucide-react";
+import { Paperclip, Send, UserRound, Users, X } from "lucide-react";
 import { useId, useRef, useState } from "react";
 import { submitRequestAction } from "@/app/(app)/b/actions";
 import { MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, SUBMIT_PRIORITIES } from "@/lib/requests/constants";
 import type { Person, RequestType } from "@/lib/requests/types";
-import { formatFileSize } from "./ui";
+import { Avatar, formatFileSize } from "./ui";
 import { uploadFiles } from "./upload";
 
-export type CreatedRequest = { id: string; code: string; failedUploads: string[] };
+export type CreatedRequest = { id: string; code: string; failedUploads: string[]; assignError?: string };
 
 export function RequestForm({
   boardId,
   requestTypes,
   requesterOptions,
+  assigneeOptions,
   currentUserId,
   onCreated,
   onCancel,
@@ -22,6 +23,8 @@ export function RequestForm({
   requestTypes: RequestType[];
   /** Team only: lets the team file a request on someone's behalf. */
   requesterOptions?: Person[];
+  /** Team only: people who can be assigned while creating the request. */
+  assigneeOptions?: Person[];
   currentUserId: string;
   onCreated: (created: CreatedRequest) => void;
   onCancel?: () => void;
@@ -36,6 +39,7 @@ export function RequestForm({
   const self = requesterOptions?.find((p) => p.id === currentUserId);
   const [requesterQuery, setRequesterQuery] = useState(self ? `${self.name} — ${self.email}` : "");
   const [requesterId, setRequesterId] = useState(self?.id ?? "");
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const busy = status !== "idle";
 
   function addFiles(list: FileList | null) {
@@ -78,6 +82,7 @@ export function RequestForm({
       dueDate: get("dueDate"),
       description: get("description"),
       requesterId: requesterOptions ? requesterId : undefined,
+      assigneeIds: assigneeOptions ? assigneeIds : undefined,
     });
     if (!result.ok) {
       setError(result.error);
@@ -92,7 +97,8 @@ export function RequestForm({
     }
     setStatus("idle");
     setFiles([]);
-    onCreated({ id: result.id, code: result.code, failedUploads });
+    setAssigneeIds([]);
+    onCreated({ id: result.id, code: result.code, failedUploads, assignError: result.assignError });
   }
 
   return (
@@ -125,6 +131,34 @@ export function RequestForm({
           <p className="mt-1.5 text-xs text-muted">
             {requesterId ? "Requester selected — they'll get the updates." : "Pick who this request is for."}
           </p>
+        </fieldset>
+      ) : null}
+
+      {assigneeOptions?.length ? (
+        <fieldset className="rounded-lg border border-line p-3">
+          <legend className="flex items-center gap-1.5 px-1 text-xs font-semibold uppercase tracking-wider text-muted">
+            <Users className="h-3.5 w-3.5" /> Assignees (optional)
+          </legend>
+          <div className="flex flex-wrap gap-2">
+            {assigneeOptions.map((member) => {
+              const on = assigneeIds.includes(member.id);
+              return (
+                <button
+                  aria-pressed={on}
+                  className={`inline-flex items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-xs font-semibold ${
+                    on ? "border-brand bg-brand/15 text-white" : "border-line text-muted hover:text-white"
+                  }`}
+                  disabled={busy}
+                  key={member.id}
+                  onClick={() => setAssigneeIds((ids) => (on ? ids.filter((id) => id !== member.id) : [...ids, member.id]))}
+                  type="button"
+                >
+                  <Avatar person={member} />
+                  {member.id === currentUserId ? `${member.name} (you)` : member.name}
+                </button>
+              );
+            })}
+          </div>
         </fieldset>
       ) : null}
 
