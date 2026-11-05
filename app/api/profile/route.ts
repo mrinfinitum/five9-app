@@ -1,19 +1,22 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { getCurrentUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
 
 /** Lets a signed-in user set their own display name. */
 export async function POST(request: NextRequest) {
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getClaims();
-  const userId = data?.claims?.sub;
-  if (!userId) return NextResponse.json({ error: "Signed out" }, { status: 401 });
+  // Active accounts only: deactivated users keep a valid session token until it expires.
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Signed out" }, { status: 401 });
+  const userId = user.id;
 
   const body = (await request.json().catch(() => ({}))) as { fullName?: unknown };
   const fullName = typeof body.fullName === "string" ? body.fullName.trim().slice(0, 120) : "";
   if (!fullName) return NextResponse.json({ error: "Name required" }, { status: 400 });
 
   const { error } = await createAdminClient().from("profiles").update({ full_name: fullName }).eq("id", userId);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error("[profile] update failed", error.message);
+    return NextResponse.json({ error: "Could not save your name" }, { status: 500 });
+  }
   return NextResponse.json({ ok: true });
 }

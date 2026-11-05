@@ -360,6 +360,17 @@ async function ensureBucket() {
   bucketReady = true;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** True when `path` is `<requestId>/<uuid>-<safe name>` with no traversal. */
+function attachmentPathFor(requestId: string, path: string) {
+  if (typeof requestId !== "string" || typeof path !== "string" || !UUID_RE.test(requestId)) return false;
+  const prefix = `${requestId}/`;
+  if (!path.startsWith(prefix)) return false;
+  const rest = path.slice(prefix.length);
+  return /^[0-9a-f-]{36}-[\w.\- ]{1,120}$/i.test(rest) && !rest.includes("..") && UUID_RE.test(rest.slice(0, 36));
+}
+
 /** Returns a one-time upload URL after checking the user can see the request. */
 export async function createUploadTargetAction(
   requestId: string,
@@ -378,7 +389,7 @@ export async function createUploadTargetAction(
     if ((count ?? 0) >= MAX_ATTACHMENTS) throw new Error(`Requests can have up to ${MAX_ATTACHMENTS} files.`);
 
     await ensureBucket();
-    const safeName = fileName.replace(/[^\w.\- ]+/g, "_").slice(-120) || "file";
+    const safeName = fileName.replace(/[^\w.\- ]+/g, "_").replace(/\.{2,}/g, ".").slice(-120) || "file";
     const path = `${requestId}/${randomUUID()}-${safeName}`;
     const { data, error } = await createAdminClient().storage.from(ATTACHMENT_BUCKET).createSignedUploadUrl(path);
     check(error);
@@ -397,12 +408,15 @@ export async function registerAttachmentAction(input: {
 }): Promise<ActionResult> {
   try {
     const { user, supabase } = await context();
-    if (!input.path.startsWith(`${input.requestId}/`)) throw new Error("Upload path doesn't match the request.");
+    // Must be the exact shape createUploadTargetAction hands out, so a row can
+    // never point at (and later expose or delete) another request's file.
+    if (!attachmentPathFor(input.requestId, input.path)) throw new Error("Upload path doesn't match the request.");
+    if (!Number.isFinite(input.fileSize) || input.fileSize < 0 || input.fileSize > MAX_ATTACHMENT_BYTES) throw new Error("File is too large.");
     const { error } = await supabase.from("request_attachments").insert({
       request_id: input.requestId,
       file_name: input.fileName.slice(0, 255),
       file_size: input.fileSize,
-      content_type: input.contentType,
+      content_type: typeof input.contentType === "string" ? input.contentType.slice(0, 200) : null,
       storage_path: input.path,
       uploaded_by: user.id,
     });
@@ -416,9 +430,11 @@ export async function registerAttachmentAction(input: {
 /** One email per upload batch, sent after all files are in. */
 export async function notifyAttachmentsAction(requestId: string, fileNames: string[]): Promise<ActionResult> {
   try {
-    const { user } = await context();
-    if (fileNames.length) {
-      notify({ kind: "attachments", requestId, actorId: user.id, fileNames: fileNames.slice(0, 10) }, await publicOrigin());
+    const { user, supabase } = await context();
+    const { data: canView } = await supabase.rpc("can_view_request", { target: requestId });
+    if (!canView) throw new Error("You can't post on this request.");
+    if (Array.isArray(fileNames) && fileNames.length) {
+      notify({ kind: "attachments", requestId, actorId: user.id, fileNames: fileNames.slice(0, 10).map((name) => String(name).slice(0, 255)) }, await publicOrigin());
     }
     refresh();
     return { ok: true };

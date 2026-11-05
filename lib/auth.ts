@@ -41,6 +41,12 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
 
   if (preset && (!profile || profile.role !== "admin" || !profile.is_active)) {
     const admin = createAdminClient();
+    // Only promote someone who has proven they own the address (an accepted
+    // invite or a used email link), never a self sign-up with an unconfirmed email.
+    const { data: authUser } = await admin.auth.admin.getUserById(userId);
+    const confirmed =
+      authUser.user?.email?.toLowerCase() === email && Boolean(authUser.user.email_confirmed_at || authUser.user.confirmed_at);
+    if (!confirmed) return null;
     const { data: upserted } = await admin
       .from("profiles")
       .upsert({ id: userId, email, role: "admin", is_active: true }, { onConflict: "id" })
