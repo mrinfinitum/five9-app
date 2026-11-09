@@ -284,7 +284,7 @@ export async function addCommentAction(requestId: string, body: string, isIntern
       .from("request_comments")
       .insert({ request_id: requestId, author_id: user.id, body: clean, is_internal: isInternal });
     check(error, error?.code === "42501" ? "You can't post on this request." : undefined);
-    if (!isInternal) notify({ kind: "comment", requestId, actorId: user.id, body: clean }, await publicOrigin());
+    notify({ kind: "comment", requestId, actorId: user.id, body: clean, isInternal: Boolean(isInternal) }, await publicOrigin());
     refresh();
     return { ok: true };
   } catch (error) {

@@ -9,7 +9,7 @@ import { button, escapeHtml, layout as baseLayout, quote } from "./templates";
 
 export type RequestEvent =
   | { kind: "created"; requestId: string; actorId: string }
-  | { kind: "comment"; requestId: string; actorId: string; body: string }
+  | { kind: "comment"; requestId: string; actorId: string; body: string; isInternal?: boolean }
   | { kind: "completed"; requestId: string; actorId: string }
   | { kind: "attachments"; requestId: string; actorId: string; fileNames: string[] }
   | { kind: "assigned"; requestId: string; actorId: string; assigneeId: string };
@@ -59,7 +59,14 @@ async function deliver(event: RequestEvent, origin: string) {
     .maybeSingle();
   if (!request) return;
 
-  const ids = [request.requester_id, event.actorId, event.kind === "assigned" ? event.assigneeId : null].filter(
+  // Conversation and file updates also go to everyone assigned to the request.
+  let assigneeIds: string[] = [];
+  if (event.kind === "comment" || event.kind === "attachments") {
+    const { data: assigned } = await admin.from("request_assignees").select("user_id").eq("request_id", request.id);
+    assigneeIds = (assigned ?? []).map((row) => row.user_id as string);
+  }
+
+  const ids = [request.requester_id, event.actorId, event.kind === "assigned" ? event.assigneeId : null, ...assigneeIds].filter(
     (id): id is string => Boolean(id),
   );
   const { data: profiles } = await admin
@@ -68,14 +75,6 @@ async function deliver(event: RequestEvent, origin: string) {
     .in("id", [...new Set(ids)]);
   const byId = new Map((profiles ?? []).map((p) => [p.id, p as Profile]));
   const actor = byId.get(event.actorId);
-  const { data: actorMembership } = await admin
-    .from("board_members")
-    .select("user_id")
-    .eq("board_id", request.board_id)
-    .eq("user_id", event.actorId)
-    .maybeSingle();
-  // The board team (admins + board members) vs. the person who asked.
-  const actorIsTeam = actor?.role === "admin" || Boolean(actorMembership);
   const board = (Array.isArray(request.boards) ? request.boards[0] : request.boards) as {
     slug: string;
     name: string;
@@ -147,60 +146,69 @@ async function deliver(event: RequestEvent, origin: string) {
     );
   }
 
+  // Everyone on the request hears about new messages and files, whoever wrote
+  // them: the requester, the assignees, and the team inbox — never the author.
+  // Each person gets one email; the requester gets the requester's copy.
+  const unique = (emails: string[]) => [...new Set(emails.map((email) => email.trim().toLowerCase()).filter(Boolean))];
+  const assigneeEmails = assigneeIds
+    .map((id) => byId.get(id))
+    .filter((p): p is Profile => Boolean(p?.is_active))
+    .map((p) => p.email);
+  const internal = event.kind === "comment" && Boolean(event.isInternal);
+  const requesterTo = internal ? [] : exceptActor(unique(requesterEmail));
+  const teamTo = exceptActor(unique([...assigneeEmails, ...team])).filter((email) => !requesterTo.includes(email));
+
   if (event.kind === "comment") {
-    if (actorIsTeam) {
-      // Team replied: tell the requester (unless they wrote it).
-      sends.push(
-        sendEmail({
-          to: requesterEmail.filter((email) => email.toLowerCase() !== actorEmail),
-          subject: `New reply on ${code}: ${shortTitle}`,
-          html: layout(
-            greeting(requester) +
-              `<p>${escapeHtml(nameOf(actor))} replied on ${label}:</p>` +
-              quote(event.body) +
-              button(requesterLink, "Reply or view the request"),
-          ),
-        }),
-      );
-    } else {
-      // Requester replied: tell the team.
-      sends.push(
-        sendEmail({
-          to: exceptActor(team),
-          subject: `${nameOf(actor)} replied on ${code}: ${shortTitle}`,
-          replyTo: actor?.email,
-          html: layout(`<p>${escapeHtml(nameOf(actor))} replied on ${label}:</p>` + quote(event.body) + button(boardLink, "Open on the board")),
-        }),
-      );
-    }
+    sends.push(
+      sendEmail({
+        to: requesterTo,
+        subject: `New reply on ${code}: ${shortTitle}`,
+        replyTo: actor?.email,
+        html: layout(
+          greeting(requester) +
+            `<p>${escapeHtml(nameOf(actor))} replied on ${label}:</p>` +
+            quote(event.body) +
+            button(requesterLink, "Reply or view the request"),
+        ),
+      }),
+    );
+    sends.push(
+      sendEmail({
+        to: teamTo,
+        subject: `${internal ? "Internal note" : `${nameOf(actor)} replied`} on ${code}: ${shortTitle}`,
+        replyTo: actor?.email,
+        html: layout(
+          `<p>${escapeHtml(nameOf(actor))} ${internal ? "left an internal note (the requester can't see it)" : "replied"} on ${label}:</p>` +
+            quote(event.body) +
+            button(boardLink, "Open on the board"),
+        ),
+      }),
+    );
   }
 
   if (event.kind === "attachments" && event.fileNames.length) {
     const names = event.fileNames.slice(0, 10);
     const list = `<ul>${names.map((name) => `<li>${escapeHtml(name)}</li>`).join("")}</ul>`;
     const noun = names.length === 1 ? "file" : "files";
-    if (actorIsTeam) {
-      sends.push(
-        sendEmail({
-          to: requesterEmail.filter((email) => email.toLowerCase() !== actorEmail),
-          subject: `You have files to review on ${code}: ${shortTitle}`,
-          html: layout(
-            greeting(requester) +
-              `<p>${escapeHtml(nameOf(actor))} added ${names.length} ${noun} for you to review on ${label}.</p>` +
-              list +
-              button(requesterLink, `Review the ${noun}`),
-          ),
-        }),
-      );
-    } else {
-      sends.push(
-        sendEmail({
-          to: exceptActor(team),
-          subject: `New ${noun} on ${code}: ${shortTitle}`,
-          html: layout(`<p>${escapeHtml(nameOf(actor))} added ${names.length} ${noun} to ${label}.</p>` + list + button(boardLink, "Open on the board")),
-        }),
-      );
-    }
+    sends.push(
+      sendEmail({
+        to: requesterTo,
+        subject: `New ${noun} on ${code}: ${shortTitle}`,
+        html: layout(
+          greeting(requester) +
+            `<p>${escapeHtml(nameOf(actor))} added ${names.length} ${noun} on ${label}.</p>` +
+            list +
+            button(requesterLink, `View the ${noun}`),
+        ),
+      }),
+    );
+    sends.push(
+      sendEmail({
+        to: teamTo,
+        subject: `New ${noun} on ${code}: ${shortTitle}`,
+        html: layout(`<p>${escapeHtml(nameOf(actor))} added ${names.length} ${noun} to ${label}.</p>` + list + button(boardLink, "Open on the board")),
+      }),
+    );
   }
 
   if (event.kind === "completed" && requester?.is_active) {
