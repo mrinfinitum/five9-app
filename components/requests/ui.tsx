@@ -45,12 +45,20 @@ function initials(name: string) {
   return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "?";
 }
 
+// Bright, distinct colors so each person is easy to pick out on the dark board.
 const AVATAR_TONES = [
-  "bg-brand text-on-brand",
-  "bg-neutral-600 text-white",
-  "bg-red-900 text-white",
-  "bg-zinc-500 text-white",
-  "bg-neutral-800 text-white ring-1 ring-brand",
+  "bg-sky-500 text-white",
+  "bg-emerald-500 text-white",
+  "bg-amber-400 text-neutral-950",
+  "bg-violet-500 text-white",
+  "bg-pink-500 text-white",
+  "bg-teal-400 text-neutral-950",
+  "bg-orange-500 text-white",
+  "bg-indigo-500 text-white",
+  "bg-lime-400 text-neutral-950",
+  "bg-fuchsia-500 text-white",
+  "bg-cyan-400 text-neutral-950",
+  "bg-rose-500 text-white",
 ];
 
 function tone(id: string) {
