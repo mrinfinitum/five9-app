@@ -68,3 +68,6 @@ export type RequestItem = {
 };
 
 export type CurrentUserInfo = { id: string; isAdmin: boolean };
+
+/** When the current user last opened each request (request id → ISO time); unopened ones count from `since`. */
+export type ReadMarks = { since: string; reads: Record<string, string> };

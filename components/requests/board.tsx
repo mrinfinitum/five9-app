@@ -26,6 +26,7 @@ import {
   archiveClosedAction,
   getRequestAction,
   createRequestTypeAction,
+  markRequestReadAction,
   deleteRequestAction,
   setArchivedAction,
   toggleAssigneeAction,
@@ -33,7 +34,7 @@ import {
   type ActionResult,
 } from "@/app/(app)/b/actions";
 import { REQUEST_PRIORITIES, REQUEST_STATUSES, type RequestStatus, priorityName, statusName } from "@/lib/requests/constants";
-import type { Board, CurrentUserInfo, Person, RequestItem, RequestType } from "@/lib/requests/types";
+import type { Board, CurrentUserInfo, Person, ReadMarks, RequestItem, RequestType } from "@/lib/requests/types";
 import { ConfirmDialog, Dialog } from "@/components/ui/dialog";
 import { Popover, PopoverOption, anchorFrom, type Anchor } from "@/components/ui/popover";
 import { PersonCard } from "./person-card";
@@ -84,9 +85,10 @@ type Props = {
   requesterOptions: Person[];
   requestTypes: RequestType[];
   currentUser: CurrentUserInfo;
+  readMarks?: ReadMarks;
 };
 
-export function RequestBoard({ board, requests, team, people, requesterOptions, requestTypes, currentUser }: Props) {
+export function RequestBoard({ board, requests, team, people, requesterOptions, requestTypes, currentUser, readMarks }: Props) {
   const [optimistic, applyOptimistic] = useOptimistic(requests, (state: RequestItem[], update: (r: RequestItem[]) => RequestItem[]) => update(state));
   const [, startTransition] = useTransition();
   const viewKey = `f9-view:${board.id}`;
@@ -99,6 +101,8 @@ export function RequestBoard({ board, requests, team, people, requesterOptions, 
   const [sortAsc, setSortAsc] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set(["completed"]));
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Requests opened in this tab since the page loaded (request id → time read).
+  const [readNow, setReadNow] = useState<Record<string, string>>({});
   const [conversationFocus, setConversationFocus] = useState(false);
   const [fieldMenu, setFieldMenu] = useState<FieldMenu | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
@@ -152,6 +156,29 @@ export function RequestBoard({ board, requests, team, people, requesterOptions, 
     else url.searchParams.delete("request");
     window.history.replaceState(null, "", url);
   }, [selectedId, optimistic]);
+
+  /** Comments from other people posted since this user last opened the request. */
+  function unreadCount(request: RequestItem) {
+    if (!readMarks) return 0;
+    const marks = [readMarks.reads[request.id], readNow[request.id]].filter(Boolean) as string[];
+    const lastRead = marks.length ? marks.reduce((a, b) => (a > b ? a : b)) : readMarks.since;
+    return request.comments.filter((c) => c.kind === "comment" && c.authorId !== currentUser.id && c.createdAt > lastRead).length;
+  }
+
+  // Opening a request (or new comments arriving while it's open) marks it read.
+  const selectedForRead = optimistic.find((r) => r.id === selectedId) ?? null;
+  const selectedUnread = selectedForRead ? unreadCount(selectedForRead) : 0;
+  useEffect(() => {
+    if (!selectedForRead || !readMarks || !selectedUnread) return;
+    // Never earlier than the newest comment, in case this computer's clock runs behind.
+    const newest = selectedForRead.comments.reduce((latest, c) => (c.createdAt > latest ? c.createdAt : latest), "");
+    const now = new Date().toISOString();
+    const id = selectedForRead.id;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- clears the badge as the request opens
+    setReadNow((current) => ({ ...current, [id]: newest > now ? newest : now }));
+    void markRequestReadAction(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedForRead?.id, selectedUnread]);
 
   const openPartialId = optimistic.find((r) => r.id === selectedId && r.partial)?.id ?? null;
   useEffect(() => {
@@ -493,6 +520,25 @@ export function RequestBoard({ board, requests, team, people, requesterOptions, 
   function conversationBadge(request: RequestItem) {
     const count = conversationCount(request);
     if (!count) return null;
+    const unread = unreadCount(request);
+    if (unread) {
+      return (
+        <button
+          aria-label={`Open conversation for ${request.code} (${unread} new comment${unread === 1 ? "" : "s"})`}
+          className="inline-flex items-center gap-1 rounded-full bg-brand px-2 py-0.5 text-xs font-bold text-white shadow-[0_0_0_3px_rgba(225,6,0,0.25)] hover:brightness-110"
+          onClick={(e) => {
+            e.stopPropagation();
+            setConversationFocus(true);
+            setSelectedId(request.id);
+          }}
+          title={`${unread} new comment${unread === 1 ? "" : "s"}`}
+          type="button"
+        >
+          <MessageSquare className="h-3.5 w-3.5" />
+          {unread}
+        </button>
+      );
+    }
     return (
       <button
         aria-label={`Open conversation for ${request.code} (${count} comment${count === 1 ? "" : "s"})`}

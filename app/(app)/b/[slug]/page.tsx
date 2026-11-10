@@ -14,6 +14,7 @@ import {
   listBoardPeople,
   listPeople,
   listRequestTypes,
+  getReadMarks,
   listRequests,
 } from "@/lib/requests/data";
 
@@ -39,11 +40,12 @@ async function BoardLoader({ params }: { params: Promise<{ slug: string }> }) {
   if (!context) notFound();
   const { board } = context;
 
-  const [active, archived, people, requestTypes] = await Promise.all([
+  const [active, archived, people, requestTypes, readMarks] = await Promise.all([
     listRequests(board.id, { activeOnly: true }),
     listArchivedSummaries(board.id),
     listPeople(),
     listRequestTypes(),
+    getReadMarks(user.id),
   ]);
   const requests = [...active, ...archived];
   const team = await listBoardPeople(board.id, people);
@@ -70,6 +72,7 @@ async function BoardLoader({ params }: { params: Promise<{ slug: string }> }) {
         board={board}
         currentUser={{ id: user.id, isAdmin: user.isAdmin }}
         people={people}
+        readMarks={readMarks}
         requestTypes={requestTypes}
         requesterOptions={team}
         requests={requests}

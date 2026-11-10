@@ -1,7 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { boardLogoUrl, requestCode } from "./constants";
-import type { Board, Person, RequestItem, RequestType } from "./types";
+import type { Board, Person, ReadMarks, RequestItem, RequestType } from "./types";
 
 type Row = Record<string, unknown>;
 
@@ -179,4 +179,22 @@ export async function listBoardPeople(boardId: string, people: Person[]): Promis
   check(error);
   const members = new Set((data ?? []).map((m) => m.user_id));
   return people.filter((person) => person.isActive && (person.role === "admin" || members.has(person.id)));
+}
+
+/**
+ * When the signed-in user last opened each request, for unread comment badges.
+ * Requests they've never opened count from `since`. Missing table (migration
+ * not applied yet) means no badges rather than an error.
+ */
+export async function getReadMarks(userId: string): Promise<ReadMarks> {
+  const supabase = await createClient();
+  const [{ data: profile }, { data: reads, error }] = await Promise.all([
+    supabase.from("profiles").select("comments_seen_since").eq("id", userId).maybeSingle(),
+    supabase.from("request_reads").select("request_id, last_read_at"),
+  ]);
+  if (error) return { since: new Date().toISOString(), reads: {} };
+  return {
+    since: (profile?.comments_seen_since as string | undefined) ?? new Date().toISOString(),
+    reads: Object.fromEntries((reads ?? []).map((r) => [r.request_id as string, r.last_read_at as string])),
+  };
 }

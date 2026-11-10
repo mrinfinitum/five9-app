@@ -275,6 +275,20 @@ export async function getRequestAction(requestId: string): Promise<ActionResult<
 // Conversation
 // ---------------------------------------------------------------------------
 
+/** Records that the signed-in user has seen a request's conversation (clears its unread badge). */
+export async function markRequestReadAction(requestId: string): Promise<ActionResult> {
+  try {
+    const { user, supabase } = await context();
+    const { error } = await supabase
+      .from("request_reads")
+      .upsert({ user_id: user.id, request_id: requestId, last_read_at: new Date().toISOString() }, { onConflict: "user_id,request_id" });
+    check(error);
+    return { ok: true };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
 export async function addCommentAction(requestId: string, body: string, isInternal = false): Promise<ActionResult> {
   try {
     const { user, supabase } = await context();
