@@ -6,6 +6,7 @@ import { addCommentAction, deleteAttachmentAction, toggleAssigneeAction, updateR
 import { MAX_ATTACHMENTS, priorityName, statusName, type RequestStatus } from "@/lib/requests/constants";
 import type { CurrentUserInfo, Person, RequestAttachment, RequestItem } from "@/lib/requests/types";
 import { ConfirmDialog, Dialog } from "@/components/ui/dialog";
+import { LinkifiedText } from "@/components/ui/linkified-text";
 import type { Mutate } from "./board";
 import { Avatar, PRIORITY_CHIP, PriorityLabel, STATUS_CHIP, formatDateTime, formatFileSize } from "./ui";
 import { uploadFiles } from "./upload";
@@ -379,7 +380,7 @@ export function Conversation({
               ) : null}
               <time className="text-muted" dateTime={comment.createdAt}>{formatDateTime(comment.createdAt)}</time>
             </div>
-            <p className="mt-1 whitespace-pre-wrap break-words text-sm text-neutral-200">{comment.body}</p>
+            <p className="mt-1 whitespace-pre-wrap break-words text-sm text-neutral-200"><LinkifiedText text={comment.body} /></p>
           </li>
         );
       })}
