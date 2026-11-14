@@ -45,20 +45,22 @@ function initials(name: string) {
   return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "?";
 }
 
-// Bright, distinct colors so each person is easy to pick out on the dark board.
+// Bright, distinct colors so each person is easy to pick out. Fixed hex values
+// (not theme tokens): light mode re-maps the Tailwind scales, and a person's
+// color should look the same in both themes.
 const AVATAR_TONES = [
-  "bg-sky-500 text-white",
-  "bg-emerald-500 text-white",
-  "bg-amber-400 text-neutral-950",
-  "bg-violet-500 text-white",
-  "bg-pink-500 text-white",
-  "bg-teal-400 text-neutral-950",
-  "bg-orange-500 text-white",
-  "bg-indigo-500 text-white",
-  "bg-lime-400 text-neutral-950",
-  "bg-fuchsia-500 text-white",
-  "bg-cyan-400 text-neutral-950",
-  "bg-rose-500 text-white",
+  "bg-[#0284c7] text-[#fff]",
+  "bg-[#059669] text-[#fff]",
+  "bg-[#f59e0b] text-[#111]",
+  "bg-[#7c3aed] text-[#fff]",
+  "bg-[#db2777] text-[#fff]",
+  "bg-[#2dd4bf] text-[#111]",
+  "bg-[#ea580c] text-[#fff]",
+  "bg-[#4f46e5] text-[#fff]",
+  "bg-[#a3e635] text-[#111]",
+  "bg-[#c026d3] text-[#fff]",
+  "bg-[#22d3ee] text-[#111]",
+  "bg-[#e11d48] text-[#fff]",
 ];
 
 function tone(id: string) {

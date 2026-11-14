@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { Logo } from "@/components/logo";
 import { getCurrentUser } from "@/lib/auth";
+import { hasWebAnalyticsAccess } from "@/lib/google/access";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -26,12 +27,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 async function NavAndUser() {
   const user = await getCurrentUser();
   if (!user) return null;
+  const webAccess = await hasWebAnalyticsAccess(user.id);
   return (
     <>
       <nav className="flex min-w-0 items-center text-sm font-medium sm:gap-1">
         <Link className="whitespace-nowrap rounded-md px-1.5 py-1.5 text-[0.8rem] text-neutral-300 hover:bg-panel hover:text-white min-[390px]:px-2 min-[390px]:text-sm sm:px-3" href="/boards">
           Boards
         </Link>
+        {webAccess || user.isAdmin ? (
+          <Link className="whitespace-nowrap rounded-md px-1.5 py-1.5 text-[0.8rem] text-neutral-300 hover:bg-panel hover:text-white min-[390px]:px-2 min-[390px]:text-sm sm:px-3" href={webAccess ? "/web" : "/web/settings"}>
+            Web
+          </Link>
+        ) : null}
         {user.isAdmin ? (
           <>
             <Link className="whitespace-nowrap rounded-md px-1.5 py-1.5 text-[0.8rem] text-neutral-300 hover:bg-panel hover:text-white min-[390px]:px-2 min-[390px]:text-sm sm:px-3" href="/analytics">
