@@ -169,7 +169,6 @@ async function Ga4Section({ site, days }: { site: WebSite; days: number }) {
       <TotalTiles totals={report.totals} />
       <TrendPanel title="Traffic over time" trend={report.trend} />
       <div className="grid gap-3 xl:grid-cols-2">
-        {report.products.length ? <RankedList format={`currency:${report.currency}`} rows={report.products} title="Top products" unit="Revenue" /> : null}
         <RankedList rows={report.pages} title="Top pages" unit="Views" />
         <RankedList rows={report.channels} title="Channels" unit="Sessions" />
         <RankedList rows={report.sources} title="Source / medium" unit="Sessions" />
