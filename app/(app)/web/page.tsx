@@ -210,7 +210,7 @@ async function SearchSection({ site, days }: { site: WebSite; days: number }) {
       <TrendPanel title="Search performance over time" trend={report.trend} />
       <div className="grid gap-3 xl:grid-cols-2">
         <RankedList rows={report.queries} title="Top queries" unit="Clicks" />
-        <RankedList link={(row) => (/^https?:\/\//.test(row.key) ? row.key : null)} rows={report.pages} title="Top pages" unit="Clicks" />
+        <RankedList linkUrls rows={report.pages} title="Top pages" unit="Clicks" />
         <RankedList rows={report.countries} title="Countries" unit="Clicks" />
         <RankedList rows={report.devices} title="Devices" unit="Clicks" />
       </div>

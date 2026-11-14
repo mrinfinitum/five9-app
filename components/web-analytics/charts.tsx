@@ -179,15 +179,15 @@ export function RankedList({
   unit,
   format = "number",
   empty = "No data for this period.",
-  link,
+  linkUrls = false,
 }: {
   title: string;
   rows: Row[];
   unit: string;
   format?: MetricFormat;
   empty?: string;
-  /** Turn labels into links (e.g. page paths to the live site). */
-  link?: (row: Row) => string | null;
+  /** Make labels that are full web addresses (e.g. Search Console pages) clickable. */
+  linkUrls?: boolean;
 }) {
   const max = Math.max(1, ...rows.map((r) => r.value));
   const columns = rows[0]?.cells?.map((c) => c.label) ?? [];
@@ -209,7 +209,7 @@ export function RankedList({
           ) : null}
           <ol className="space-y-2.5">
             {rows.map((row) => {
-              const href = link?.(row);
+              const href = linkUrls && /^https?:\/\//.test(row.key) ? row.key : null;
               return (
                 <li className="group" key={row.key} title={`${row.label}: ${formatMetric(row.value, format)} ${unit}`}>
                   <div className="flex items-baseline gap-4 text-sm">
