@@ -14,14 +14,15 @@ export function rangeFor(key: string | undefined) {
   return RANGES.find((r) => r.key === key) ?? RANGES[1];
 }
 
-export type MetricFormat = "number" | "percent" | "duration" | "decimal";
+/** `currency:USD` etc. formats as money in that currency. */
+export type MetricFormat = "number" | "percent" | "duration" | "decimal" | `currency:${string}`;
 export type Total = { key: string; label: string; current: number; previous: number; format: MetricFormat; lowerIsBetter?: boolean };
 export type TrendSeries = { key: string; label: string; format: MetricFormat; current: number[]; previous: number[] };
 export type Trend = { dates: string[]; previousDates: string[]; series: TrendSeries[] };
 export type Row = { key: string; label: string; value: number; cells?: { label: string; value: number; format: MetricFormat }[] };
 export type Window = { start: string; end: string; previousStart: string; previousEnd: string };
 
-export type Ga4Report = { window: Window; totals: Total[]; trend: Trend; pages: Row[]; channels: Row[]; sources: Row[]; devices: Row[]; countries: Row[] };
+export type Ga4Report = { window: Window; currency: string; totals: Total[]; trend: Trend; products: Row[]; pages: Row[]; channels: Row[]; sources: Row[]; devices: Row[]; countries: Row[] };
 export type SearchReport = { window: Window; totals: Total[]; trend: Trend; queries: Row[]; pages: Row[]; countries: Row[]; devices: Row[] };
 
 const REPORT_TTL = 10 * 60_000;
@@ -90,7 +91,7 @@ export function listSearchSites(): Promise<SearchSite[]> {
 
 type Ga4Response = { rows?: { dimensionValues?: { value: string }[]; metricValues?: { value: string }[] }[] };
 
-const GA_TOTALS: { key: string; label: string; format: MetricFormat }[] = [
+const GA_TOTALS: { key: string; label: string; format: MetricFormat; store?: boolean }[] = [
   { key: "activeUsers", label: "Users", format: "number" },
   { key: "newUsers", label: "New users", format: "number" },
   { key: "sessions", label: "Sessions", format: "number" },
@@ -98,20 +99,26 @@ const GA_TOTALS: { key: string; label: string; format: MetricFormat }[] = [
   { key: "engagementRate", label: "Engagement rate", format: "percent" },
   { key: "averageSessionDuration", label: "Avg. session", format: "duration" },
   { key: "keyEvents", label: "Key events", format: "number" },
+  { key: "purchaseRevenue", label: "Revenue", format: "currency:", store: true },
+  { key: "ecommercePurchases", label: "Orders", format: "number", store: true },
+  { key: "averagePurchaseRevenue", label: "Avg. order", format: "currency:", store: true },
+  { key: "sessionKeyEventRate:purchase", label: "Conversion rate", format: "percent", store: true },
 ];
-const GA_TREND = GA_TOTALS.filter((m) => ["activeUsers", "sessions", "screenPageViews", "keyEvents"].includes(m.key));
+const GA_TREND = GA_TOTALS.filter((m) => ["activeUsers", "sessions", "screenPageViews", "keyEvents", "purchaseRevenue", "ecommercePurchases"].includes(m.key));
 
-function propertyTimeZone(propertyId: string) {
-  return cached(`ga4:tz:${propertyId}`, 24 * 60 * 60_000, async () => {
-    const property = await googleFetch<{ timeZone?: string }>(`https://analyticsadmin.googleapis.com/v1beta/properties/${propertyId}`);
-    return property.timeZone || "America/Chicago";
+function propertyInfo(propertyId: string) {
+  return cached(`ga4:info:${propertyId}`, 24 * 60 * 60_000, async () => {
+    const property = await googleFetch<{ timeZone?: string; currencyCode?: string }>(`https://analyticsadmin.googleapis.com/v1beta/properties/${propertyId}`);
+    return { timeZone: property.timeZone || "America/Chicago", currency: property.currencyCode || "USD" };
   });
 }
 
 export function ga4Report(propertyId: string, days: number): Promise<Ga4Report> {
   if (!/^\d{1,20}$/.test(propertyId)) throw new Error("Invalid GA4 property ID.");
   return cached(`ga4:${propertyId}:${days}`, REPORT_TTL, async () => {
-    const win = windowFor(days, await propertyTimeZone(propertyId));
+    const info = await propertyInfo(propertyId);
+    const win = windowFor(days, info.timeZone);
+    const withCurrency = (format: MetricFormat): MetricFormat => (format === "currency:" ? `currency:${info.currency}` : format);
     const both = [
       { startDate: win.start, endDate: win.end, name: "current" },
       { startDate: win.previousStart, endDate: win.previousEnd, name: "previous" },
@@ -140,19 +147,33 @@ export function ga4Report(propertyId: string, days: number): Promise<Ga4Report> 
       }),
       googleFetch<{ reports: Ga4Response[] }>(`https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:batchRunReports`, {
         method: "POST",
-        body: { requests: [ranked("deviceCategory", "sessions", 5), ranked("country", "activeUsers")] },
+        body: { requests: [ranked("deviceCategory", "sessions", 5), ranked("country", "activeUsers"), ranked("itemName", "itemRevenue")] },
       }),
     ]);
     const [totalsRes, trendRes, pagesRes, channelsRes, sourcesRes] = batch.reports;
-    const [devicesRes, countriesRes] = extra.reports;
+    const [devicesRes, countriesRes, productsRes] = extra.reports;
 
     // Totals: one row per date range (the range name is the last dimension).
     const byRange = new Map((totalsRes.rows ?? []).map((r) => [r.dimensionValues?.at(-1)?.value, r.metricValues ?? []]));
-    const totals: Total[] = GA_TOTALS.map((m, i) => ({
-      ...m,
+    const all: Total[] = GA_TOTALS.map((m, i) => ({
+      key: m.key,
+      label: m.label,
+      format: withCurrency(m.format),
       current: Number(byRange.get("current")?.[i]?.value ?? 0),
       previous: Number(byRange.get("previous")?.[i]?.value ?? 0),
     }));
+    // Store metrics only show for sites that have had an order in either window.
+    const orders = all.find((t) => t.key === "ecommercePurchases");
+    const isStore = Boolean(orders && (orders.current || orders.previous));
+    const storeKeys = new Set(GA_TOTALS.filter((m) => m.store).map((m) => m.key));
+    // GA's averagePurchaseRevenue only averages orders that carry a transaction ID; use revenue ÷ orders instead.
+    const revenue = all.find((t) => t.key === "purchaseRevenue");
+    const aov = all.find((t) => t.key === "averagePurchaseRevenue");
+    if (revenue && orders && aov) {
+      aov.current = orders.current ? revenue.current / orders.current : 0;
+      aov.previous = orders.previous ? revenue.previous / orders.previous : 0;
+    }
+    const totals = isStore ? all : all.filter((t) => !storeKeys.has(t.key));
 
     // Trend: zero-fill every day so the two windows line up day by day.
     const dates = dayList(win.start, days);
@@ -160,7 +181,13 @@ export function ga4Report(propertyId: string, days: number): Promise<Ga4Report> 
     const index = new Map<string, number>();
     dates.forEach((d, i) => index.set(`current:${d.replace(/-/g, "")}`, i));
     previousDates.forEach((d, i) => index.set(`previous:${d.replace(/-/g, "")}`, i));
-    const series: TrendSeries[] = GA_TREND.map((m) => ({ ...m, current: Array(days).fill(0), previous: Array(days).fill(0) }));
+    const series: TrendSeries[] = GA_TREND.map((m) => ({
+      key: m.key,
+      label: m.label,
+      format: withCurrency(m.format),
+      current: Array(days).fill(0),
+      previous: Array(days).fill(0),
+    }));
     for (const row of trendRes.rows ?? []) {
       const [date, range] = (row.dimensionValues ?? []).map((v) => v.value);
       const i = index.get(`${range}:${date}`);
@@ -176,8 +203,10 @@ export function ga4Report(propertyId: string, days: number): Promise<Ga4Report> 
 
     return {
       window: win,
+      currency: info.currency,
       totals,
-      trend: { dates, previousDates, series },
+      trend: { dates, previousDates, series: isStore ? series : series.filter((t) => !storeKeys.has(t.key)) },
+      products: isStore ? rows(productsRes, (v) => (!v || v === "(not set)" ? "Unnamed (store didn't send a product name)" : v)) : [],
       pages: rows(pagesRes),
       channels: rows(channelsRes),
       sources: rows(sourcesRes),
