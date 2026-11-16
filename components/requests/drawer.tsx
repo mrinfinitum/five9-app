@@ -199,21 +199,11 @@ export function RequestDrawer({
       <div className="grid gap-6 p-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
         {/* Primary */}
         <div className="min-w-0 space-y-6">
-          <section>
-            <label className="label" htmlFor="request-details">Request details</label>
-            <textarea
-              className="field min-h-40 whitespace-pre-wrap"
-              defaultValue={request.description ?? ""}
-              id="request-details"
-              maxLength={4000}
-              onBlur={(e) => {
-                const value = e.target.value;
-                if (value.trim() === (request.description ?? "").trim()) return;
-                mutate(patch({ description: value.trim() || null }), () => updateRequestAction(request.id, { description: value }));
-              }}
-              placeholder="No request details were provided."
-            />
-          </section>
+          <RequestDetails
+            key={request.id}
+            onSave={(value) => mutate(patch({ description: value.trim() || null }), () => updateRequestAction(request.id, { description: value }))}
+            value={request.description ?? ""}
+          />
 
           <Attachments onError={onError} people={people} request={request} canDelete />
         </div>
@@ -567,6 +557,59 @@ export function Attachments({
           title="Delete this file?"
         />
       ) : null}
+    </section>
+  );
+}
+
+/** Request details: shown with clickable links; click the text (or Edit) to change it. */
+function RequestDetails({ value, onSave }: { value: string; onSave: (value: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const id = useId();
+
+  if (editing) {
+    return (
+      <section>
+        <label className="label" htmlFor={id}>Request details</label>
+        <textarea
+          autoFocus
+          className="field min-h-40 whitespace-pre-wrap"
+          defaultValue={value}
+          id={id}
+          maxLength={4000}
+          onBlur={(e) => {
+            setEditing(false);
+            if (e.target.value.trim() !== value.trim()) onSave(e.target.value);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.stopPropagation();
+              e.currentTarget.value = value;
+              e.currentTarget.blur();
+            }
+          }}
+          placeholder="No request details were provided."
+        />
+      </section>
+    );
+  }
+
+  return (
+    <section>
+      <div className="flex items-center justify-between">
+        <h3 className="label">Request details</h3>
+        <button className="mb-1.5 inline-flex items-center gap-1 text-xs text-muted hover:text-white" onClick={() => setEditing(true)} type="button">
+          <Pencil className="h-3 w-3" /> Edit
+        </button>
+      </div>
+      {/* Clicking the text (but not a link in it) opens the editor, like the old always-editable box. */}
+      <div
+        className="field min-h-40 cursor-text whitespace-pre-wrap break-words"
+        onClick={(e) => {
+          if (!(e.target as HTMLElement).closest("a") && !window.getSelection()?.toString()) setEditing(true);
+        }}
+      >
+        {value.trim() ? <LinkifiedText text={value} /> : <span className="text-neutral-500">No request details were provided.</span>}
+      </div>
     </section>
   );
 }
