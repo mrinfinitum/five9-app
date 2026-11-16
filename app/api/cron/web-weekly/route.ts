@@ -22,7 +22,8 @@ function cronAuthorized(request: NextRequest) {
  *   the browser, for a signed-in web analytics viewer or a cron-secret caller.
  * - With `Authorization: Bearer $CRON_SECRET`: `?dry=1` lists what would be
  *   sent. Without it, emails go out only when WEB_WEEKLY_EMAIL_SEND=1;
- *   otherwise it behaves like a dry run. Not scheduled in vercel.json yet.
+ *   otherwise it behaves like a dry run. Runs Mondays at 14:15 UTC (vercel.json).
+ *   Recipients are set in lib/email/web-weekly.ts.
  */
 export async function GET(request: NextRequest) {
   await connection();
