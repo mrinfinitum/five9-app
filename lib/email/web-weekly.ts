@@ -3,7 +3,6 @@ import { listWebSites, type WebSite } from "@/lib/google/access";
 import { change, formatDay, formatMetric } from "@/lib/google/format";
 import type { Row } from "@/lib/google/reports";
 import { averageLabel, weeklyReport, type InsightTone, type WeeklyReport } from "@/lib/google/weekly";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "./send";
 import { button, escapeHtml, layout } from "./templates";
 
@@ -15,34 +14,29 @@ import { button, escapeHtml, layout } from "./templates";
 
 export type WebWeeklyEmail = { site: WebSite; to: string[]; subject: string; html: string; report: WeeklyReport };
 
-/**
- * Who gets the reports: WEB_WEEKLY_EMAILS (comma-separated) when set, else
- * everyone on the web analytics allow-list.
- */
-export async function webWeeklyRecipients() {
+/** Everyone who gets every board's report (override with WEB_WEEKLY_EMAILS, comma-separated). */
+const DEFAULT_RECIPIENTS = ["geoff@pgamemes.com", "travis@pgamemes.com"];
+
+/** Extra recipients for one board's report only, by board slug. */
+const BOARD_RECIPIENTS: Record<string, string[]> = {
+  "upswing-golf": ["justin@upswinggolf.com"],
+};
+
+export function webWeeklyRecipients(boardSlug: string) {
   const configured = (process.env.WEB_WEEKLY_EMAILS ?? "")
     .split(",")
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
-  if (configured.length) return configured;
-  const admin = createAdminClient();
-  const { data: viewers, error } = await admin.from("web_analytics_viewers").select("user_id");
-  if (error) throw new Error(error.message);
-  const ids = (viewers ?? []).map((v) => v.user_id);
-  if (!ids.length) return [];
-  const { data: people, error: peopleError } = await admin.from("profiles").select("email, is_active").in("id", ids);
-  if (peopleError) throw new Error(peopleError.message);
-  return (people ?? []).filter((p) => p.is_active !== false && p.email).map((p) => p.email.toLowerCase());
+  return [...new Set([...(configured.length ? configured : DEFAULT_RECIPIENTS), ...(BOARD_RECIPIENTS[boardSlug] ?? [])])];
 }
 
 export async function buildWebWeeklyEmails(origin: string, only?: { slug?: string; week?: string }): Promise<WebWeeklyEmail[]> {
   const sites = (await listWebSites()).filter((s) => s.ga4PropertyId && (!only?.slug || s.slug === only.slug));
-  const to = await webWeeklyRecipients();
   const emails: WebWeeklyEmail[] = [];
   for (const site of sites) {
     const report = await weeklyReport(site.ga4PropertyId!, only?.week);
     const range = `${formatDay(report.week.start)}–${formatDay(report.week.end)}`;
-    emails.push({ site, to, report, subject: `${site.name} web report · ${range}`, html: renderEmail(site, report, origin) });
+    emails.push({ site, to: webWeeklyRecipients(site.slug), report, subject: `${site.name} web report · ${range}`, html: renderEmail(site, report, origin) });
   }
   return emails;
 }
