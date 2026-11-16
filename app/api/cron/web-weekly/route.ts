@@ -21,8 +21,8 @@ function cronAuthorized(request: NextRequest) {
  * - `?preview=1` (optionally `&client=slug&week=YYYY-MM-DD`) shows one email in
  *   the browser, for a signed-in web analytics viewer or a cron-secret caller.
  * - With `Authorization: Bearer $CRON_SECRET`: `?dry=1` lists what would be
- *   sent. Without it, emails go out only when WEB_WEEKLY_EMAIL_SEND=1;
- *   otherwise it behaves like a dry run. Runs Mondays at 14:15 UTC (vercel.json).
+ *   sent. Without it, emails go out unless WEB_WEEKLY_EMAIL_SEND=0
+ *   (the off switch), which makes it a dry run. Runs Mondays at 14:15 UTC (vercel.json).
  *   Recipients are set in lib/email/web-weekly.ts.
  */
 export async function GET(request: NextRequest) {
@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
 
   const emails = await buildWebWeeklyEmails(origin);
   const summary = emails.map((e) => ({ board: e.site.slug, to: e.to, subject: e.subject, insights: e.report.insights.length }));
-  const sendingEnabled = process.env.WEB_WEEKLY_EMAIL_SEND === "1";
+  const sendingEnabled = process.env.WEB_WEEKLY_EMAIL_SEND !== "0";
   if (params.get("dry") === "1" || !sendingEnabled) {
     return Response.json({ dryRun: true, sendingEnabled, count: emails.length, emails: summary });
   }
