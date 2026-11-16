@@ -8,10 +8,21 @@ import { useState } from "react";
 export type SwitcherSite = { slug: string; name: string; hasGa4: boolean; hasSearch: boolean };
 
 /** The client list: a searchable sidebar on wide screens, a dropdown on phones. */
-export function SiteSwitcher({ sites, selected, range }: { sites: SwitcherSite[]; selected: string; range: string }) {
+export function SiteSwitcher({
+  sites,
+  selected,
+  range,
+  basePath = "/web",
+}: {
+  sites: SwitcherSite[];
+  selected: string;
+  range?: string;
+  /** The page each client links to, e.g. "/web/weekly". A string, not a function: this is a client component. */
+  basePath?: string;
+}) {
   const router = useRouter();
   const [query, setQuery] = useState("");
-  const href = (slug: string) => `/web?client=${encodeURIComponent(slug)}&range=${range}`;
+  const href = (slug: string) => `${basePath}?client=${encodeURIComponent(slug)}${range ? `&range=${range}` : ""}`;
   const shown = sites.filter((s) => s.name.toLowerCase().includes(query.trim().toLowerCase()));
 
   return (

@@ -1,4 +1,4 @@
-import { Globe, Search, Settings, TriangleAlert } from "lucide-react";
+import { CalendarDays, Globe, Search, Settings, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
@@ -56,6 +56,11 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/web">["se
                 </Link>
               ))}
             </nav>
+          ) : null}
+          {site?.ga4PropertyId ? (
+            <Link className="btn-ghost inline-flex items-center gap-1.5 px-3 py-1.5 text-xs" href={`/web/weekly?client=${encodeURIComponent(site.slug)}`}>
+              <CalendarDays className="h-3.5 w-3.5" /> Weekly report
+            </Link>
           ) : null}
           {user.isAdmin ? (
             <Link className="btn-ghost inline-flex items-center gap-1.5 px-3 py-1.5 text-xs" href="/web/settings">

@@ -112,7 +112,7 @@ const GA_TREND: { key: string; label: string; format: MetricFormat; store?: bool
   { key: "ecommercePurchases", label: "Orders", format: "number", store: true },
 ];
 
-function propertyInfo(propertyId: string) {
+export function propertyInfo(propertyId: string) {
   return cached(`ga4:info:${propertyId}`, 24 * 60 * 60_000, async () => {
     const property = await googleFetch<{ timeZone?: string; currencyCode?: string }>(`https://analyticsadmin.googleapis.com/v1beta/properties/${propertyId}`);
     return { timeZone: property.timeZone || "America/Chicago", currency: property.currencyCode || "USD" };
