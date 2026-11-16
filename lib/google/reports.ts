@@ -156,14 +156,27 @@ export function ga4Report(propertyId: string, days: number): Promise<Ga4Report> 
           requests: [
             ranked("deviceCategory", "sessions", 5),
             ranked("country", "activeUsers"),
-            ranked("itemName", "itemRevenue"),
+            {
+              dateRanges: current,
+              dimensions: [{ name: "itemId" }, { name: "itemName" }],
+              metrics: [{ name: "itemRevenue" }],
+              orderBys: [{ metric: { metricName: "itemRevenue" }, desc: true }],
+              limit: 250,
+            },
             { dateRanges: both, metrics: STORE_METRICS.map((name) => ({ name })) },
+            // A year of item names, to name items that arrive with only an ID (see productRows).
+            {
+              dateRanges: [{ startDate: "365daysAgo", endDate: "yesterday" }],
+              dimensions: [{ name: "itemId" }, { name: "itemName" }],
+              metrics: [{ name: "itemsViewed" }, { name: "itemsPurchased" }],
+              limit: 2000,
+            },
           ],
         },
       }),
     ]);
     const [totalsRes, trendRes, pagesRes, channelsRes, sourcesRes] = batch.reports;
-    const [devicesRes, countriesRes, productsRes, storeRes] = extra.reports;
+    const [devicesRes, countriesRes, productsRes, storeRes, itemNamesRes] = extra.reports;
 
     // Totals: one row per date range (the range name is the last dimension).
     const rangeValues = (res: Ga4Response) => {
@@ -218,7 +231,7 @@ export function ga4Report(propertyId: string, days: number): Promise<Ga4Report> 
       currency: info.currency,
       totals,
       trend: { dates, previousDates, series: isStore ? series : series.filter((t) => !GA_TREND.find((m) => m.key === t.key)?.store) },
-      products: isStore ? rows(productsRes, (v) => (!v || v === "(not set)" ? "Unnamed (store didn't send a product name)" : v)) : [],
+      products: isStore ? productRows(productsRes, itemNamesRes) : [],
       pages: rows(pagesRes),
       channels: rows(channelsRes),
       sources: rows(sourcesRes),
@@ -226,6 +239,52 @@ export function ga4Report(propertyId: string, days: number): Promise<Ga4Report> 
       countries: rows(countriesRes),
     };
   });
+}
+
+/** "shopify_US_123_456" → "shopify:123"; other IDs as they are. Empty or "null" IDs can't be matched. */
+function productKey(itemId: string) {
+  if (!itemId || itemId === "(not set)") return null;
+  const shopify = /^shopify_[A-Z]{2}_(\d+)_/.exec(itemId);
+  if (shopify) return `shopify:${shopify[1]}`;
+  if (itemId.startsWith("shopify_")) return null;
+  return itemId;
+}
+
+/**
+ * Top products by revenue, grouped by product rather than variant. Some
+ * stores send purchases from their server with only an item ID (Shopify's
+ * Google channel does this for orders that didn't go through a browser), so
+ * unnamed items take the name most often seen with the same product over the
+ * last year. Items with no usable ID stay "Unnamed".
+ */
+function productRows(revenue: Ga4Response, names: Ga4Response): Row[] {
+  const unnamed = (name: string | undefined) => !name || name === "(not set)";
+  const counts = new Map<string, Map<string, number>>();
+  for (const r of names.rows ?? []) {
+    const [id, name] = (r.dimensionValues ?? []).map((d) => d.value);
+    const key = productKey(id);
+    if (!key || unnamed(name)) continue;
+    const seen = counts.get(key) ?? new Map<string, number>();
+    const weight = (r.metricValues ?? []).reduce((sum, m) => sum + Number(m.value || 0), 0) || 1;
+    seen.set(name, (seen.get(name) ?? 0) + weight);
+    counts.set(key, seen);
+  }
+  const bestName = (key: string | null) => {
+    const seen = key ? counts.get(key) : undefined;
+    return seen ? [...seen].sort((a, b) => b[1] - a[1])[0][0] : null;
+  };
+
+  const groups = new Map<string, Row>();
+  for (const r of revenue.rows ?? []) {
+    const [id, name] = (r.dimensionValues ?? []).map((d) => d.value);
+    const key = productKey(id);
+    const label = bestName(key) ?? (unnamed(name) ? "Unnamed (store didn't send a product name)" : name);
+    const groupKey = key && bestName(key) ? key : `name:${label}`;
+    const row = groups.get(groupKey) ?? { key: groupKey, label, value: 0 };
+    row.value += Number(r.metricValues?.[0]?.value ?? 0);
+    groups.set(groupKey, row);
+  }
+  return [...groups.values()].filter((r) => r.value).sort((a, b) => b.value - a.value).slice(0, 10);
 }
 
 // ---------- Search Console ----------
