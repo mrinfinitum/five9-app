@@ -1,18 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getCurrentUser } from "@/lib/auth";
+import { securityViewerOrThrow } from "@/lib/security/access";
 import { fixAutomationReady, fixPrompt, openFixIssue, type FindingRow } from "@/lib/security/fix";
 import { runSecurityScan } from "@/lib/security/scan";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type Result = { ok: true; message?: string; prompt?: string; url?: string } | { ok: false; error: string };
 
-async function admin() {
-  const user = await getCurrentUser();
-  if (!user?.isAdmin) throw new Error("Admins only.");
-  return user;
-}
+const admin = securityViewerOrThrow;
 
 const fail = (error: unknown): Result => ({ ok: false, error: error instanceof Error ? error.message : "Something went wrong." });
 

@@ -1,7 +1,7 @@
 import { ShieldCheck } from "lucide-react";
 import { Suspense } from "react";
 import { FindingList, RunScanButton, type FindingView } from "@/components/security/security-console";
-import { requireAdmin } from "@/lib/auth";
+import { requireSecurityViewer } from "@/lib/security/access";
 import { fixAutomationReady, fixRepo } from "@/lib/security/fix";
 import { SEVERITY_ORDER } from "@/lib/security/scan";
 import type { Severity } from "@/lib/security/checks";
@@ -34,7 +34,7 @@ function when(iso: string | null) {
 }
 
 async function Security() {
-  await requireAdmin();
+  await requireSecurityViewer();
   const db = createAdminClient();
   const [findingsRes, scansRes] = await Promise.all([
     db

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Suspense } from "react";
 import { AdminConsole, type AdminBoardRow, type AdminUserRow } from "@/components/admin/admin-console";
 import { SetupNotice } from "@/components/setup-notice";
@@ -16,11 +15,6 @@ export default function AdminPage() {
       <header className="mb-6">
         <p className="text-xs font-bold uppercase tracking-[0.25em] text-brand">Admin</p>
         <h1 className="mt-1 text-3xl font-black tracking-tight text-white">Users &amp; boards</h1>
-        <p className="mt-1 text-sm">
-          <Link className="text-brand hover:underline" href="/admin/security">
-            Security checks →
-          </Link>
-        </p>
         <p className="mt-2 max-w-2xl text-sm text-muted">
           Invite people by email, create boards, and choose who can see each one. Admins see every board. Only invited people can
           sign in.

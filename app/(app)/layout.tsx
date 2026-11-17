@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { Logo } from "@/components/logo";
 import { getCurrentUser } from "@/lib/auth";
 import { hasWebAnalyticsAccess } from "@/lib/google/access";
+import { canSeeSecurity } from "@/lib/security/access";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -50,9 +51,11 @@ async function NavAndUser() {
             <Link className="whitespace-nowrap rounded-md px-1.5 py-1.5 text-[0.8rem] text-neutral-300 hover:bg-panel hover:text-white min-[390px]:px-2 min-[390px]:text-sm sm:px-3" href="/admin">
               Admin
             </Link>
-            <Link className="hidden whitespace-nowrap rounded-md px-1.5 py-1.5 text-[0.8rem] text-neutral-300 hover:bg-panel hover:text-white min-[390px]:px-2 min-[390px]:text-sm sm:inline-block sm:px-3" href="/admin/security">
-              Security
-            </Link>
+            {canSeeSecurity(user) ? (
+              <Link className="hidden whitespace-nowrap rounded-md px-1.5 py-1.5 text-[0.8rem] text-neutral-300 hover:bg-panel hover:text-white min-[390px]:px-2 min-[390px]:text-sm sm:inline-block sm:px-3" href="/admin/security">
+                Security
+              </Link>
+            ) : null}
           </>
         ) : null}
       </nav>

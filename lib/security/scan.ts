@@ -1,5 +1,6 @@
 import "server-only";
-import { sendEmail, teamNotificationEmails } from "@/lib/email/send";
+import { sendEmail } from "@/lib/email/send";
+import { securityViewerEmails } from "./access";
 import { button, escapeHtml, layout } from "@/lib/email/templates";
 import { listWebSites } from "@/lib/google/access";
 import { supabasePublishableKey, supabaseSecretKey, supabaseUrl } from "@/lib/env";
@@ -107,7 +108,7 @@ async function emailAlerts(alerts: Finding[]) {
     )
     .join("");
   await sendEmail({
-    to: teamNotificationEmails(),
+    to: securityViewerEmails(),
     subject: `Security scan: ${alerts.length} new ${alerts.length === 1 ? "problem" : "problems"} (${sorted[0].severity})`,
     html: layout(`<h1 style="font-size:20px;margin:0 0 12px">New security findings</h1><ul style="padding-left:18px">${rows}</ul>${button(`${appUrl()}/admin/security`, "Open the security page")}`, appUrl()),
   });
