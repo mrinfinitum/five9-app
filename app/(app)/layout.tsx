@@ -36,16 +36,22 @@ async function NavAndUser() {
         </Link>
         {webAccess || user.isAdmin ? (
           <Link className="whitespace-nowrap rounded-md px-1.5 py-1.5 text-[0.8rem] text-neutral-300 hover:bg-panel hover:text-white min-[390px]:px-2 min-[390px]:text-sm sm:px-3" href={webAccess ? "/web" : "/web/settings"}>
-            Web
+            {/* Short labels on phones, where the bar is tight. */}
+            <span className="sm:hidden">Web</span>
+            <span className="hidden sm:inline">Web analytics</span>
           </Link>
         ) : null}
         {user.isAdmin ? (
           <>
             <Link className="whitespace-nowrap rounded-md px-1.5 py-1.5 text-[0.8rem] text-neutral-300 hover:bg-panel hover:text-white min-[390px]:px-2 min-[390px]:text-sm sm:px-3" href="/analytics">
-              Analytics
+              <span className="sm:hidden">Tickets</span>
+              <span className="hidden sm:inline">Ticket analytics</span>
             </Link>
             <Link className="whitespace-nowrap rounded-md px-1.5 py-1.5 text-[0.8rem] text-neutral-300 hover:bg-panel hover:text-white min-[390px]:px-2 min-[390px]:text-sm sm:px-3" href="/admin">
               Admin
+            </Link>
+            <Link className="hidden whitespace-nowrap rounded-md px-1.5 py-1.5 text-[0.8rem] text-neutral-300 hover:bg-panel hover:text-white min-[390px]:px-2 min-[390px]:text-sm sm:inline-block sm:px-3" href="/admin/security">
+              Security
             </Link>
           </>
         ) : null}

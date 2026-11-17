@@ -4,14 +4,14 @@ import { AdminAnalytics } from "@/components/admin-analytics";
 import { requireAdmin } from "@/lib/auth";
 import { getOverallAnalytics } from "@/lib/requests/analytics";
 
-export const metadata = { title: "Analytics" };
+export const metadata = { title: "Ticket analytics" };
 
 export default function AnalyticsPage() {
   return (
     <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6">
       <header className="mb-6">
         <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.25em] text-brand">
-          <ChartNoAxesCombined className="h-3.5 w-3.5" /> Admin analytics
+          <ChartNoAxesCombined className="h-3.5 w-3.5" /> Ticket analytics
         </p>
         <h1 className="mt-1 text-3xl font-black tracking-tight text-white">All boards</h1>
         <p className="mt-2 max-w-2xl text-sm text-muted">

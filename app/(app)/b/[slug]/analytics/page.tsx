@@ -9,7 +9,7 @@ import { getBoardAnalytics } from "@/lib/requests/analytics";
 import { getBoardContext } from "@/lib/requests/data";
 import { getSatisfactionPulse } from "@/lib/requests/survey";
 
-export const metadata = { title: "Analytics" };
+export const metadata = { title: "Ticket analytics" };
 
 export default function AnalyticsPage({ params }: PageProps<"/b/[slug]/analytics">) {
   return (

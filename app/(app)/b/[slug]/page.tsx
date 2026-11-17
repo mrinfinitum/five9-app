@@ -65,7 +65,7 @@ async function BoardLoader({ params }: { params: Promise<{ slug: string }> }) {
           </p>
         </div>
         <Link className="btn-ghost" href={`/b/${board.slug}/analytics`}>
-          <ChartNoAxesCombined className="h-4 w-4" /> Analytics
+          <ChartNoAxesCombined className="h-4 w-4" /> Ticket analytics
         </Link>
       </header>
       <RequestBoard
