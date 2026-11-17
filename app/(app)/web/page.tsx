@@ -5,7 +5,7 @@ import { Suspense } from "react";
 import { RankedList, TotalTiles, TrendPanel } from "@/components/web-analytics/charts";
 import { SiteSwitcher } from "@/components/web-analytics/site-switcher";
 import { requireUser } from "@/lib/auth";
-import { hasWebAnalyticsAccess, listWebSites, type WebSite } from "@/lib/google/access";
+import { hasWebAnalyticsAccess, visibleWebSites, type WebSite } from "@/lib/google/access";
 import { GoogleApiError, GoogleNotConfiguredError } from "@/lib/google/client";
 import { formatDay } from "@/lib/google/format";
 import { RANGES, ga4Report, rangeFor, searchReport, type Window } from "@/lib/google/reports";
@@ -30,7 +30,8 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/web">["se
   const params = await searchParams;
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
   const range = rangeFor(one(params.range));
-  const sites = (await listWebSites()).filter((s) => s.ga4PropertyId || s.searchConsoleSite || s.metaAdAccountId);
+  // Only the clients (and the parts of each) this person has been given.
+  const sites = await visibleWebSites(user.id);
   const site = sites.find((s) => s.slug === one(params.client)) ?? sites[0];
 
   return (
@@ -58,7 +59,7 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/web">["se
               ))}
             </nav>
           ) : null}
-          {site?.ga4PropertyId ? (
+          {site?.canWeb && site.ga4PropertyId ? (
             <Link className="btn-ghost inline-flex items-center gap-1.5 px-3 py-1.5 text-xs" href={`/web/weekly?client=${encodeURIComponent(site.slug)}`}>
               <CalendarDays className="h-3.5 w-3.5" /> Weekly report
             </Link>
@@ -73,14 +74,14 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/web">["se
 
       {!site ? (
         <div className="card p-8 text-center">
-          <p className="text-white">No client sites are connected yet.</p>
+          <p className="text-white">{user.isAdmin ? "No client sites are connected yet, or none are shared with you." : "No client sites are shared with you yet."}</p>
           <p className="mt-1 text-sm text-muted">
             {user.isAdmin ? (
               <>
-                Link a board to its GA4 property, Search Console site or Meta ad account in <Link className="text-brand hover:underline" href="/web/settings">settings</Link>.
+                Link a board to its GA4 property, Search Console site or Meta ad account, and give yourself access, in <Link className="text-brand hover:underline" href="/web/settings">settings</Link>.
               </>
             ) : (
-              "Ask an admin to link client sites."
+              "Ask an admin to share client sites with you."
             )}
           </p>
         </div>
@@ -90,17 +91,21 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/web">["se
             <SiteSwitcher
               range={range.key}
               selected={site.slug}
-              sites={sites.map((s) => ({ slug: s.slug, name: s.name, hasGa4: Boolean(s.ga4PropertyId), hasSearch: Boolean(s.searchConsoleSite), hasMeta: Boolean(s.metaAdAccountId) }))}
+              sites={sites.map((s) => ({ slug: s.slug, name: s.name, hasGa4: s.canWeb && Boolean(s.ga4PropertyId), hasSearch: s.canWeb && Boolean(s.searchConsoleSite), hasMeta: s.canMeta }))}
             />
           </aside>
           <div className="min-w-0 space-y-10">
-            <Suspense fallback={<SectionSkeleton title="Google Analytics" />} key={`ga:${site.boardId}:${range.key}`}>
-              <Ga4Section days={range.days} site={site} />
-            </Suspense>
-            <Suspense fallback={<SectionSkeleton title="Search Console" />} key={`sc:${site.boardId}:${range.key}`}>
-              <SearchSection days={range.days} site={site} />
-            </Suspense>
-            {site.metaAdAccountId ? (
+            {site.canWeb ? (
+              <>
+                <Suspense fallback={<SectionSkeleton title="Google Analytics" />} key={`ga:${site.boardId}:${range.key}`}>
+                  <Ga4Section days={range.days} site={site} />
+                </Suspense>
+                <Suspense fallback={<SectionSkeleton title="Search Console" />} key={`sc:${site.boardId}:${range.key}`}>
+                  <SearchSection days={range.days} site={site} />
+                </Suspense>
+              </>
+            ) : null}
+            {site.canMeta && site.metaAdAccountId ? (
               <Suspense fallback={<SectionSkeleton title="Meta ads" />} key={`meta:${site.boardId}:${range.key}`}>
                 <MetaSection adAccountId={site.metaAdAccountId} days={range.days} />
               </Suspense>

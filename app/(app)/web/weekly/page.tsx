@@ -6,7 +6,7 @@ import { RankedList } from "@/components/web-analytics/charts";
 import { SiteSwitcher } from "@/components/web-analytics/site-switcher";
 import { ChannelTable, InsightList, WeeklyScorecards, WeeklyTrend } from "@/components/web-analytics/weekly";
 import { requireUser } from "@/lib/auth";
-import { hasWebAnalyticsAccess, listWebSites, type WebSite } from "@/lib/google/access";
+import { hasWebAnalyticsAccess, visibleWebSites, type WebSite } from "@/lib/google/access";
 import { formatDay } from "@/lib/google/format";
 import { averageLabel, weeklyReport } from "@/lib/google/weekly";
 
@@ -28,7 +28,7 @@ async function Report({ searchParams }: { searchParams: PageProps<"/web/weekly">
 
   const params = await searchParams;
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
-  const sites = (await listWebSites()).filter((s) => s.ga4PropertyId);
+  const sites = (await visibleWebSites(user.id)).filter((s) => s.canWeb && s.ga4PropertyId);
   const site = sites.find((s) => s.slug === one(params.client)) ?? sites[0];
   const week = one(params.week);
 

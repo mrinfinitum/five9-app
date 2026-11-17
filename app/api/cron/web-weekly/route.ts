@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { connection, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { buildWebWeeklyEmails, sendWebWeeklyEmails } from "@/lib/email/web-weekly";
-import { hasWebAnalyticsAccess } from "@/lib/google/access";
+import { visibleWebSites } from "@/lib/google/access";
 import { publicOrigin } from "@/lib/request-origin";
 
 // One GA report per client, built one after another.
@@ -33,8 +33,13 @@ export async function GET(request: NextRequest) {
   const cron = cronAuthorized(request);
   const user = cron ? null : await getCurrentUser();
 
-  if (params.get("preview") === "1" && (cron || (user && (await hasWebAnalyticsAccess(user.id))))) {
-    const emails = await buildWebWeeklyEmails(origin, { slug: params.get("client") ?? undefined, week: params.get("week") ?? undefined });
+  // People only preview clients whose web analytics they've been given.
+  const allowed = !cron && user ? (await visibleWebSites(user.id)).filter((s) => s.canWeb && s.ga4PropertyId) : [];
+  const requested = params.get("client") ?? undefined;
+  const slug = cron ? requested : allowed.find((s) => !requested || s.slug === requested)?.slug;
+
+  if (params.get("preview") === "1" && (cron || slug)) {
+    const emails = await buildWebWeeklyEmails(origin, { slug, week: params.get("week") ?? undefined });
     const email = emails[0];
     if (!email) {
       return new Response("No client with a GA4 property matches.", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8" } });

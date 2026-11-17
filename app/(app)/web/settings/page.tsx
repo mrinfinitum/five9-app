@@ -36,10 +36,11 @@ async function SettingsLoader() {
   const admin = createAdminClient();
   const email = serviceAccountEmail();
 
-  const [sites, profiles, viewers, ga4, search, meta] = await Promise.all([
+  const [sites, profiles, viewers, grants, ga4, search, meta] = await Promise.all([
     listWebSites(),
     admin.from("profiles").select("id, email, full_name, role, is_active").eq("is_active", true).order("full_name"),
     admin.from("web_analytics_viewers").select("user_id"),
+    admin.from("web_analytics_access").select("user_id, board_id, web, meta"),
     email ? listGa4Properties().then((list) => ({ list }), (e: Error) => ({ error: e.message })) : null,
     email ? listSearchSites().then((list) => ({ list }), (e: Error) => ({ error: e.message })) : null,
     metaConfigured() ? listMetaAdAccounts().then((list) => ({ list }), (e: Error) => ({ error: e.message })) : null,
@@ -47,6 +48,13 @@ async function SettingsLoader() {
   if (profiles.error) throw new Error(profiles.error.message);
   if (viewers.error) throw new Error(viewers.error.message);
   const allowed = new Set((viewers.data ?? []).map((v) => v.user_id));
+  // Before the per-client migration has run this read fails; nobody has per-client grants then.
+  const grantsByUser = new Map<string, Record<string, { web: boolean; meta: boolean }>>();
+  for (const g of grants.error ? [] : (grants.data ?? [])) {
+    const mine = grantsByUser.get(g.user_id) ?? {};
+    mine[g.board_id] = { web: Boolean(g.web), meta: Boolean(g.meta) };
+    grantsByUser.set(g.user_id, mine);
+  }
 
   return (
     <WebSettings
@@ -57,7 +65,8 @@ async function SettingsLoader() {
         name: (p.full_name as string | null)?.trim() || String(p.email).split("@")[0],
         email: p.email,
         isAdmin: p.role === "admin",
-        allowed: allowed.has(p.id),
+        mode: allowed.has(p.id) ? "all" : grantsByUser.has(p.id) ? "selected" : "none",
+        clients: grantsByUser.get(p.id) ?? {},
       }))}
       search={search as { list: SearchSite[] } | { error: string } | null}
       serviceEmail={email}

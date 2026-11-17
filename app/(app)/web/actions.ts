@@ -19,13 +19,42 @@ async function asAdmin(fn: (actorId: string) => Promise<void>): Promise<WebResul
   }
 }
 
-/** Adds or removes someone from the web analytics allow-list. */
-export async function setWebViewerAction(userId: string, allowed: boolean): Promise<WebResult> {
+const isId = (v: string) => /^[0-9a-f-]{36}$/i.test(v);
+
+/**
+ * Sets how much of web analytics someone sees: nothing, every client, or only the
+ * clients chosen one by one (setWebClientAccessAction). Choosing "none" also clears
+ * their per-client grants; "selected" keeps them.
+ */
+export async function setWebAccessAction(userId: string, mode: "none" | "all" | "selected"): Promise<WebResult> {
   return asAdmin(async (actorId) => {
+    if (!isId(userId) || !["none", "all", "selected"].includes(mode)) throw new Error("Unknown person or access level.");
     const admin = createAdminClient();
-    const { error } = allowed
-      ? await admin.from("web_analytics_viewers").upsert({ user_id: userId, granted_by: actorId }, { onConflict: "user_id" })
-      : await admin.from("web_analytics_viewers").delete().eq("user_id", userId);
+    const { error } =
+      mode === "all"
+        ? await admin.from("web_analytics_viewers").upsert({ user_id: userId, granted_by: actorId }, { onConflict: "user_id" })
+        : await admin.from("web_analytics_viewers").delete().eq("user_id", userId);
+    if (error) throw new Error(error.message);
+    if (mode === "none") {
+      const { error: clearError } = await admin.from("web_analytics_access").delete().eq("user_id", userId);
+      if (clearError) throw new Error(clearError.message);
+    }
+  });
+}
+
+/** Gives someone one client's web analytics and/or Meta ads (both off removes the client). */
+export async function setWebClientAccessAction(userId: string, boardId: string, access: { web: boolean; meta: boolean }): Promise<WebResult> {
+  return asAdmin(async (actorId) => {
+    if (!isId(userId) || !isId(boardId)) throw new Error("Unknown person or client.");
+    const web = access.web === true;
+    const meta = access.meta === true;
+    const admin = createAdminClient();
+    const { error } =
+      web || meta
+        ? await admin
+            .from("web_analytics_access")
+            .upsert({ user_id: userId, board_id: boardId, web, meta, granted_by: actorId }, { onConflict: "user_id,board_id" })
+        : await admin.from("web_analytics_access").delete().eq("user_id", userId).eq("board_id", boardId);
     if (error) throw new Error(error.message);
   });
 }

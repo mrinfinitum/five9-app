@@ -2,14 +2,15 @@
 
 import { Check, Copy, TriangleAlert } from "lucide-react";
 import { useState, useTransition } from "react";
-import { setWebSiteAction, setWebViewerAction, type WebResult } from "@/app/(app)/web/actions";
+import { setWebAccessAction, setWebClientAccessAction, setWebSiteAction, type WebResult } from "@/app/(app)/web/actions";
 import type { WebSite } from "@/lib/google/access";
 import type { Ga4Property, SearchSite } from "@/lib/google/reports";
 import type { MetaAdAccount } from "@/lib/meta/ads";
 import { Avatar } from "@/components/requests/ui";
 
 type Listing<T> = { list: T[] } | { error: string } | null;
-type PersonRow = { id: string; name: string; email: string; isAdmin: boolean; allowed: boolean };
+type AccessMode = "none" | "all" | "selected";
+type PersonRow = { id: string; name: string; email: string; isAdmin: boolean; mode: AccessMode; clients: Record<string, { web: boolean; meta: boolean }> };
 
 export function WebSettings({
   serviceEmail,
@@ -102,33 +103,7 @@ export function WebSettings({
         </div>
       </section>
 
-      <section className="card p-5">
-        <h2 className="text-lg font-bold text-white">Who can see web analytics</h2>
-        <p className="mb-4 mt-1 text-sm text-muted">Off for everyone until you turn it on here, admins included. Admins can always open these settings.</p>
-        <ul className="divide-y divide-line">
-          {people.map((person) => (
-            <li className="flex items-center gap-3 py-2.5" key={person.id}>
-              <Avatar person={person} size="md" />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-semibold text-white">
-                  {person.name} {person.isAdmin ? <span className="ml-1 text-xs font-normal text-muted">Admin</span> : null}
-                </div>
-                <div className="truncate text-xs text-muted">{person.email}</div>
-              </div>
-              <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
-                <input
-                  checked={person.allowed}
-                  className="h-4 w-4 accent-[#e10600]"
-                  disabled={pending}
-                  onChange={(e) => run(() => setWebViewerAction(person.id, e.target.checked))}
-                  type="checkbox"
-                />
-                <span className={person.allowed ? "text-white" : "text-muted"}>{person.allowed ? "Has access" : "No access"}</span>
-              </label>
-            </li>
-          ))}
-        </ul>
-      </section>
+      <PeopleAccess people={people} run={run} pending={pending} sites={sites} />
     </div>
   );
 }
@@ -181,6 +156,128 @@ function Connection({ email }: { email: string | null }) {
         </li>
       </ul>
     </section>
+  );
+}
+
+function PeopleAccess({
+  people,
+  sites,
+  pending,
+  run,
+}: {
+  people: PersonRow[];
+  sites: WebSite[];
+  pending: boolean;
+  run: (action: () => Promise<WebResult>) => void;
+}) {
+  const linked = sites.filter((s) => s.ga4PropertyId || s.searchConsoleSite || s.metaAdAccountId);
+  return (
+    <section className="card p-5">
+      <h2 className="text-lg font-bold text-white">Who can see web analytics</h2>
+      <p className="mb-4 mt-1 text-sm text-muted">
+        Off for everyone until you turn it on here, admins included. Give someone every client, or choose clients one by one and whether they see
+        the website numbers (Google Analytics and Search Console), Meta ads, or both. Admins can always open these settings.
+      </p>
+      <ul className="divide-y divide-line">
+        {people.map((person) => (
+          <PersonAccess disabled={pending} key={person.id} person={person} run={run} sites={linked} />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function PersonAccess({
+  person,
+  sites,
+  disabled,
+  run,
+}: {
+  person: PersonRow;
+  sites: WebSite[];
+  disabled: boolean;
+  run: (action: () => Promise<WebResult>) => void;
+}) {
+  // Kept locally so "Choose clients" stays open before the first client is picked.
+  const [mode, setMode] = useState<AccessMode>(person.mode);
+  const summary =
+    mode === "all"
+      ? "Every client"
+      : mode === "selected"
+        ? `${Object.keys(person.clients).length} of ${sites.length} client${sites.length === 1 ? "" : "s"}`
+        : "No access";
+  return (
+    <li className="py-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <Avatar person={person} size="md" />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-semibold text-white">
+            {person.name} {person.isAdmin ? <span className="ml-1 text-xs font-normal text-muted">Admin</span> : null}
+          </div>
+          <div className="truncate text-xs text-muted">
+            {person.email} · {summary}
+          </div>
+        </div>
+        <label className="sr-only" htmlFor={`access-${person.id}`}>
+          Web analytics access for {person.name}
+        </label>
+        <select
+          className="field w-auto py-1.5 text-sm"
+          disabled={disabled}
+          id={`access-${person.id}`}
+          onChange={(e) => {
+            const next = e.target.value as AccessMode;
+            setMode(next);
+            run(() => setWebAccessAction(person.id, next));
+          }}
+          value={mode}
+        >
+          <option value="none">No access</option>
+          <option value="all">All clients</option>
+          <option value="selected">Choose clients</option>
+        </select>
+      </div>
+      {mode === "selected" ? (
+        sites.length ? (
+          <ul className="mt-3 grid gap-2 sm:ml-12 sm:grid-cols-2">
+            {sites.map((site) => {
+              const current = person.clients[site.boardId] ?? { web: false, meta: false };
+              const hasWeb = Boolean(site.ga4PropertyId || site.searchConsoleSite);
+              const hasMeta = Boolean(site.metaAdAccountId);
+              const set = (change: Partial<{ web: boolean; meta: boolean }>) =>
+                run(() => setWebClientAccessAction(person.id, site.boardId, { ...current, ...change }));
+              return (
+                <li className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-panel-2 px-3 py-2 text-sm" key={site.boardId}>
+                  <span className="min-w-0 flex-1 truncate font-semibold text-white">{site.name}</span>
+                  <label className={`inline-flex items-center gap-1.5 ${hasWeb ? "cursor-pointer" : "opacity-40"}`} title={hasWeb ? undefined : "No GA4 or Search Console linked"}>
+                    <input
+                      checked={current.web}
+                      className="h-4 w-4 accent-[#e10600]"
+                      disabled={disabled || (!hasWeb && !current.web)}
+                      onChange={(e) => set({ web: e.target.checked })}
+                      type="checkbox"
+                    />
+                    Web
+                  </label>
+                  <label className={`inline-flex items-center gap-1.5 ${hasMeta ? "cursor-pointer" : "opacity-40"}`} title={hasMeta ? undefined : "No Meta ad account linked"}>
+                    <input
+                      checked={current.meta}
+                      className="h-4 w-4 accent-[#e10600]"
+                      disabled={disabled || (!hasMeta && !current.meta)}
+                      onChange={(e) => set({ meta: e.target.checked })}
+                      type="checkbox"
+                    />
+                    Meta ads
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="mt-2 text-sm text-muted sm:ml-12">Link a client above first.</p>
+        )
+      ) : null}
+    </li>
   );
 }
 
