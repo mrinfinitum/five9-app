@@ -46,7 +46,11 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     const { data: authUser } = await admin.auth.admin.getUserById(userId);
     const confirmed =
       authUser.user?.email?.toLowerCase() === email && Boolean(authUser.user.email_confirmed_at || authUser.user.confirmed_at);
-    if (!confirmed) return null;
+    // The profile row is created with the address the account was invited
+    // with; an account that later changed its email to a preset address
+    // still has its old one here, so it isn't promoted.
+    const invitedAs = profile ? profile.email.toLowerCase() === email : false;
+    if (!confirmed || !invitedAs) return null;
     const { data: upserted } = await admin
       .from("profiles")
       .upsert({ id: userId, email, role: "admin", is_active: true }, { onConflict: "id" })

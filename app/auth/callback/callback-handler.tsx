@@ -28,7 +28,8 @@ export function CallbackHandler() {
       if (type === "invite" || type === "recovery") next = "/account/set-password";
 
       const hashError = hash.get("error_description") ?? url.searchParams.get("error_description");
-      if (hashError) throw new Error(hashError);
+      // Show fixed wording: the description comes from the URL, so it could be anyone's text.
+      if (hashError) throw new Error("This link has expired or was already used. Request a new one.");
 
       const tokenHash = url.searchParams.get("token_hash");
       const code = url.searchParams.get("code");

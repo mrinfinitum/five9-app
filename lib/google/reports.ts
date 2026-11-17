@@ -265,7 +265,9 @@ function productRows(revenue: Ga4Response, names: Ga4Response): Row[] {
     const key = productKey(id);
     if (!key || unnamed(name)) continue;
     const seen = counts.get(key) ?? new Map<string, number>();
-    const weight = (r.metricValues ?? []).reduce((sum, m) => sum + Number(m.value || 0), 0) || 1;
+    // Purchases count far more than views: fake view hits are easy to send.
+    const [viewed, purchased] = (r.metricValues ?? []).map((m) => Number(m.value || 0));
+    const weight = (purchased || 0) * 1000 + (viewed || 0) || 1;
     seen.set(name, (seen.get(name) ?? 0) + weight);
     counts.set(key, seen);
   }

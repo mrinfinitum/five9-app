@@ -267,6 +267,12 @@ async function build(propertyId: string, start: string, latestWeek: string, info
 
 // ---------- insights ----------
 
+/** GA strings can be faked by anyone sending hits, so keep paths short and to URL-safe characters. */
+function plainPath(value: string) {
+  const clean = value.replace(/[^\w/.\-?=&%]/g, "");
+  return clean.length > 80 ? `${clean.slice(0, 79)}…` : clean;
+}
+
 const pct = (value: number) => `${Math.round(Math.abs(value) * 100)}%`;
 const rel = (now: number, then: number) => (then ? (now - then) / then : 0);
 const n = (value: number) => formatMetric(value, "number");
@@ -431,7 +437,7 @@ export function insights(r: Omit<WeeklyReport, "insights">): Insight[] {
   // Where visits started, when it's not just the home page.
   const landing = r.landingPages.find((p) => p.key && p.key !== "/" && p.key !== "(not set)");
   if (landing && landing.value >= 10) {
-    out.push({ tone: "info", title: `Top landing page after the home page: ${landing.label}`, body: `${n(landing.value)} sessions started there this week.` });
+    out.push({ tone: "info", title: `Top landing page after the home page: ${plainPath(landing.label)}`, body: `${n(landing.value)} sessions started there this week.` });
   }
 
   const order: Record<InsightTone, number> = { bad: 0, watch: 1, good: 2, info: 3 };

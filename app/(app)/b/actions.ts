@@ -193,7 +193,10 @@ export async function toggleAssigneeAction(requestId: string, userId: string, as
     if (assign) {
       const { error } = await supabase.from("request_assignees").insert({ request_id: requestId, user_id: userId, assigned_by: user.id });
       if (error?.code === "23505") return { ok: true }; // already assigned
-      check(error, error?.code === "42501" ? "Only this board's team can assign people." : undefined);
+      check(
+        error,
+        error?.code === "42501" ? (error.message.includes("not on this board") ? "That person isn't on this board." : "Only this board's team can assign people.") : undefined,
+      );
       notify({ kind: "assigned", requestId, actorId: user.id, assigneeId: userId }, await publicOrigin());
     } else {
       const { error } = await supabase.from("request_assignees").delete().eq("request_id", requestId).eq("user_id", userId);
@@ -447,8 +450,20 @@ export async function notifyAttachmentsAction(requestId: string, fileNames: stri
     const { user, supabase } = await context();
     const { data: canView } = await supabase.rpc("can_view_request", { target: requestId });
     if (!canView) throw new Error("You can't post on this request.");
-    if (Array.isArray(fileNames) && fileNames.length) {
-      notify({ kind: "attachments", requestId, actorId: user.id, fileNames: fileNames.slice(0, 10).map((name) => String(name).slice(0, 255)) }, await publicOrigin());
+    // Name only files this person actually uploaded here in the last few
+    // minutes, never names supplied by the browser (they'd go out in emails).
+    const wanted = new Set((Array.isArray(fileNames) ? fileNames : []).map((name) => String(name)));
+    const { data: recent } = await supabase
+      .from("request_attachments")
+      .select("file_name")
+      .eq("request_id", requestId)
+      .eq("uploaded_by", user.id)
+      .gte("created_at", new Date(Date.now() - 10 * 60_000).toISOString())
+      .order("created_at", { ascending: false })
+      .limit(20);
+    const names = [...new Set((recent ?? []).map((row) => row.file_name as string).filter((name) => wanted.has(name)))].slice(0, 10);
+    if (names.length) {
+      notify({ kind: "attachments", requestId, actorId: user.id, fileNames: names }, await publicOrigin());
     }
     refresh();
     return { ok: true };
