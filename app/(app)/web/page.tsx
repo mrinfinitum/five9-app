@@ -9,6 +9,7 @@ import { hasWebAnalyticsAccess, listWebSites, type WebSite } from "@/lib/google/
 import { GoogleApiError, GoogleNotConfiguredError } from "@/lib/google/client";
 import { formatDay } from "@/lib/google/format";
 import { RANGES, ga4Report, rangeFor, searchReport, type Window } from "@/lib/google/reports";
+import { metaAdsReport } from "@/lib/meta/ads";
 
 export const metadata = { title: "Web analytics" };
 
@@ -29,7 +30,7 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/web">["se
   const params = await searchParams;
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
   const range = rangeFor(one(params.range));
-  const sites = (await listWebSites()).filter((s) => s.ga4PropertyId || s.searchConsoleSite);
+  const sites = (await listWebSites()).filter((s) => s.ga4PropertyId || s.searchConsoleSite || s.metaAdAccountId);
   const site = sites.find((s) => s.slug === one(params.client)) ?? sites[0];
 
   return (
@@ -40,7 +41,7 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/web">["se
             <Globe className="h-3.5 w-3.5" /> Web analytics
           </p>
           <h1 className="mt-1 text-3xl font-black tracking-tight text-white">{site?.name ?? "Client sites"}</h1>
-          <p className="mt-1 text-sm text-muted">Google Analytics and Search Console for every client, in one place.</p>
+          <p className="mt-1 text-sm text-muted">Google Analytics, Search Console and Meta ads for every client, in one place.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {site ? (
@@ -76,7 +77,7 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/web">["se
           <p className="mt-1 text-sm text-muted">
             {user.isAdmin ? (
               <>
-                Link a board to its GA4 property or Search Console site in <Link className="text-brand hover:underline" href="/web/settings">settings</Link>.
+                Link a board to its GA4 property, Search Console site or Meta ad account in <Link className="text-brand hover:underline" href="/web/settings">settings</Link>.
               </>
             ) : (
               "Ask an admin to link client sites."
@@ -89,7 +90,7 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/web">["se
             <SiteSwitcher
               range={range.key}
               selected={site.slug}
-              sites={sites.map((s) => ({ slug: s.slug, name: s.name, hasGa4: Boolean(s.ga4PropertyId), hasSearch: Boolean(s.searchConsoleSite) }))}
+              sites={sites.map((s) => ({ slug: s.slug, name: s.name, hasGa4: Boolean(s.ga4PropertyId), hasSearch: Boolean(s.searchConsoleSite), hasMeta: Boolean(s.metaAdAccountId) }))}
             />
           </aside>
           <div className="min-w-0 space-y-10">
@@ -99,6 +100,11 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/web">["se
             <Suspense fallback={<SectionSkeleton title="Search Console" />} key={`sc:${site.boardId}:${range.key}`}>
               <SearchSection days={range.days} site={site} />
             </Suspense>
+            {site.metaAdAccountId ? (
+              <Suspense fallback={<SectionSkeleton title="Meta ads" />} key={`meta:${site.boardId}:${range.key}`}>
+                <MetaSection adAccountId={site.metaAdAccountId} days={range.days} />
+              </Suspense>
+            ) : null}
           </div>
         </div>
       )}
@@ -219,6 +225,38 @@ async function SearchSection({ site, days }: { site: WebSite; days: number }) {
         <RankedList linkUrls rows={report.pages} title="Top pages" unit="Clicks" />
         <RankedList rows={report.countries} title="Countries" unit="Clicks" />
         <RankedList rows={report.devices} title="Devices" unit="Clicks" />
+      </div>
+    </section>
+  );
+}
+
+async function MetaSection({ adAccountId, days }: { adAccountId: string; days: number }) {
+  const icon = <span className="rounded bg-[#0866ff] px-1.5 py-0.5 text-[0.65rem] font-black text-white">Meta</span>;
+  let report;
+  try {
+    report = await metaAdsReport(adAccountId, days);
+  } catch (error) {
+    return (
+      <section>
+        <SectionHeader icon={icon} title="Meta ads" />
+        <Problem error={error} />
+      </section>
+    );
+  }
+  const money = `currency:${report.currency}` as const;
+  return (
+    <section className="space-y-3">
+      <SectionHeader
+        icon={icon}
+        note={report.hasPurchases ? "Purchases use Meta's own attribution, so they won't match GA4" : report.accountName}
+        title="Meta ads"
+        window={report.window}
+      />
+      <TotalTiles totals={report.totals} />
+      <TrendPanel title="Ad results over time" trend={report.trend} />
+      <div className="grid gap-3 xl:grid-cols-2">
+        <RankedList empty="No ad spend in this period." format={money} rows={report.campaigns} title="Campaigns" unit="Spend" />
+        <RankedList empty="No ad spend in this period." format={money} rows={report.ads} title="Top ads" unit="Spend" />
       </div>
     </section>
   );

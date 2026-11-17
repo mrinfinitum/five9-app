@@ -2,6 +2,7 @@
 
 import { refresh } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
+import { normalizeAdAccountId } from "@/lib/meta/ads";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type WebResult = { ok: true } | { ok: false; error: string };
@@ -29,14 +30,14 @@ export async function setWebViewerAction(userId: string, allowed: boolean): Prom
   });
 }
 
-/** Links a client board to its GA4 property and Search Console site (blank clears either). */
+/** Links a client board to its GA4 property, Search Console site and Meta ad account (blank clears any of them). */
 export async function setWebSiteAction(
   boardId: string,
-  input: { ga4PropertyId?: string | null; searchConsoleSite?: string | null },
+  input: { ga4PropertyId?: string | null; searchConsoleSite?: string | null; metaAdAccountId?: string | null },
 ): Promise<WebResult> {
   return asAdmin(async () => {
     const admin = createAdminClient();
-    const { data: current } = await admin.from("web_analytics_sites").select("ga4_property_id, search_console_site").eq("board_id", boardId).maybeSingle();
+    const { data: current } = await admin.from("web_analytics_sites").select("ga4_property_id, search_console_site, meta_ad_account_id").eq("board_id", boardId).maybeSingle();
 
     let ga4 = current?.ga4_property_id ?? null;
     if (input.ga4PropertyId !== undefined) {
@@ -51,11 +52,21 @@ export async function setWebSiteAction(
       }
     }
 
+    let meta = current?.meta_ad_account_id ?? null;
+    if (input.metaAdAccountId !== undefined) {
+      const id = normalizeAdAccountId(input.metaAdAccountId);
+      if (id === undefined) throw new Error("A Meta ad account ID is a number, like act_123456789012345 or 123456789012345.");
+      meta = id;
+    }
+
     const { error } =
-      ga4 || site
+      ga4 || site || meta
         ? await admin
             .from("web_analytics_sites")
-            .upsert({ board_id: boardId, ga4_property_id: ga4, search_console_site: site, updated_at: new Date().toISOString() }, { onConflict: "board_id" })
+            .upsert(
+              { board_id: boardId, ga4_property_id: ga4, search_console_site: site, meta_ad_account_id: meta, updated_at: new Date().toISOString() },
+              { onConflict: "board_id" },
+            )
         : await admin.from("web_analytics_sites").delete().eq("board_id", boardId);
     if (error) throw new Error(error.message);
   });

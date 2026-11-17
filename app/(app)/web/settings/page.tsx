@@ -6,6 +6,7 @@ import { requireAdmin } from "@/lib/auth";
 import { listWebSites } from "@/lib/google/access";
 import { serviceAccountEmail } from "@/lib/google/client";
 import { listGa4Properties, listSearchSites, type Ga4Property, type SearchSite } from "@/lib/google/reports";
+import { listMetaAdAccounts, metaConfigured, type MetaAdAccount } from "@/lib/meta/ads";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const metadata = { title: "Web analytics settings" };
@@ -20,7 +21,7 @@ export default function WebSettingsPage() {
         <p className="text-xs font-bold uppercase tracking-[0.25em] text-brand">Admin</p>
         <h1 className="mt-1 text-3xl font-black tracking-tight text-white">Web analytics settings</h1>
         <p className="mt-2 max-w-2xl text-sm text-muted">
-          Connect each client board to its Google Analytics 4 property and Search Console site, and choose who can see the dashboard.
+          Connect each client board to its Google Analytics 4 property, Search Console site and Meta ad account, and choose who can see the dashboard.
         </p>
       </header>
       <Suspense fallback={<div className="h-96 animate-pulse rounded-xl bg-panel" />}>
@@ -35,12 +36,13 @@ async function SettingsLoader() {
   const admin = createAdminClient();
   const email = serviceAccountEmail();
 
-  const [sites, profiles, viewers, ga4, search] = await Promise.all([
+  const [sites, profiles, viewers, ga4, search, meta] = await Promise.all([
     listWebSites(),
     admin.from("profiles").select("id, email, full_name, role, is_active").eq("is_active", true).order("full_name"),
     admin.from("web_analytics_viewers").select("user_id"),
     email ? listGa4Properties().then((list) => ({ list }), (e: Error) => ({ error: e.message })) : null,
     email ? listSearchSites().then((list) => ({ list }), (e: Error) => ({ error: e.message })) : null,
+    metaConfigured() ? listMetaAdAccounts().then((list) => ({ list }), (e: Error) => ({ error: e.message })) : null,
   ]);
   if (profiles.error) throw new Error(profiles.error.message);
   if (viewers.error) throw new Error(viewers.error.message);
@@ -49,6 +51,7 @@ async function SettingsLoader() {
   return (
     <WebSettings
       ga4={ga4 as { list: Ga4Property[] } | { error: string } | null}
+      meta={meta as { list: MetaAdAccount[] } | { error: string } | null}
       people={(profiles.data ?? []).map((p) => ({
         id: p.id,
         name: (p.full_name as string | null)?.trim() || String(p.email).split("@")[0],

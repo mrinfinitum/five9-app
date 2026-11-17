@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { setWebSiteAction, setWebViewerAction, type WebResult } from "@/app/(app)/web/actions";
 import type { WebSite } from "@/lib/google/access";
 import type { Ga4Property, SearchSite } from "@/lib/google/reports";
+import type { MetaAdAccount } from "@/lib/meta/ads";
 import { Avatar } from "@/components/requests/ui";
 
 type Listing<T> = { list: T[] } | { error: string } | null;
@@ -15,12 +16,14 @@ export function WebSettings({
   sites,
   ga4,
   search,
+  meta,
   people,
 }: {
   serviceEmail: string | null;
   sites: WebSite[];
   ga4: Listing<Ga4Property>;
   search: Listing<SearchSite>;
+  meta: Listing<MetaAdAccount>;
   people: PersonRow[];
 }) {
   const [error, setError] = useState<string | null>(null);
@@ -40,21 +43,23 @@ export function WebSettings({
       ) : null}
 
       <Connection email={serviceEmail} />
+      <MetaConnection meta={meta} />
 
       <section className="card p-5">
         <h2 className="text-lg font-bold text-white">Client sites</h2>
         <p className="mb-4 mt-1 text-sm text-muted">
-          Pick each client&apos;s GA4 property and Search Console site. Only what the service account can see is listed; if a client is
+          Pick each client&apos;s GA4 property, Search Console site and Meta ad account. Only what the service account can see is listed; if a client is
           missing, add the service account to their property first (lists refresh every few minutes).
         </p>
-        <Listings ga4={ga4} search={search} />
+        <Listings ga4={ga4} meta={meta} search={search} />
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-sm">
+          <table className="w-full min-w-[900px] text-sm">
             <thead>
               <tr className="text-left text-xs uppercase tracking-wider text-muted">
                 <th className="py-2 pr-3 font-semibold">Board</th>
                 <th className="px-3 py-2 font-semibold">GA4 property</th>
-                <th className="py-2 pl-3 font-semibold">Search Console site</th>
+                <th className="px-3 py-2 font-semibold">Search Console site</th>
+                <th className="py-2 pl-3 font-semibold">Meta ad account</th>
               </tr>
             </thead>
             <tbody>
@@ -70,13 +75,24 @@ export function WebSettings({
                       value={site.ga4PropertyId}
                     />
                   </td>
-                  <td className="py-2.5 pl-3">
+                  <td className="px-3 py-2.5">
                     <Picker
                       disabled={pending}
                       onChange={(value) => run(() => setWebSiteAction(site.boardId, { searchConsoleSite: value }))}
                       options={search && "list" in search ? search.list.map((s) => ({ value: s.siteUrl, label: s.siteUrl })) : null}
                       placeholder="sc-domain:example.com"
                       value={site.searchConsoleSite}
+                    />
+                  </td>
+                  <td className="py-2.5 pl-3">
+                    <Picker
+                      disabled={pending}
+                      onChange={(value) => run(() => setWebSiteAction(site.boardId, { metaAdAccountId: value }))}
+                      options={
+                        meta && "list" in meta ? meta.list.map((a) => ({ value: a.id, label: `${a.name} (${a.id})`, group: a.business ?? undefined })) : null
+                      }
+                      placeholder="act_123456789012345"
+                      value={site.metaAdAccountId}
                     />
                   </td>
                 </tr>
@@ -168,8 +184,43 @@ function Connection({ email }: { email: string | null }) {
   );
 }
 
-function Listings({ ga4, search }: { ga4: Listing<Ga4Property>; search: Listing<SearchSite> }) {
-  const problems = [ga4 && "error" in ga4 ? `GA4: ${ga4.error}` : null, search && "error" in search ? `Search Console: ${search.error}` : null].filter(Boolean);
+function MetaConnection({ meta }: { meta: Listing<MetaAdAccount> }) {
+  if (meta) {
+    return (
+      <section className="card p-5">
+        <h2 className="text-lg font-bold text-white">Meta connection</h2>
+        <p className="mt-1 text-sm text-muted">
+          {"list" in meta
+            ? `Connected. The token can read ${meta.list.length} ad account${meta.list.length === 1 ? "" : "s"}. To add a client, assign their ad account to the system user in Meta Business settings (View performance).`
+            : "The token is set, but Meta returned an error (below)."}
+        </p>
+      </section>
+    );
+  }
+  return (
+    <section className="card border-amber-700/50 p-5">
+      <h2 className="flex items-center gap-2 text-lg font-bold text-white">
+        <TriangleAlert className="h-5 w-5 text-amber-400" /> Meta ads aren&apos;t connected yet
+      </h2>
+      <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-sm text-neutral-300">
+        <li>In Meta Business settings, make sure each client&apos;s ad account is listed under Accounts → Ad accounts (owned or shared with you as a partner).</li>
+        <li>Under Accounts → Apps, add an app (create a Business-type app at developers.facebook.com if you don&apos;t have one).</li>
+        <li>Under Users → System users, add a system user (Employee role), then Assign assets → the ad accounts → <em>View performance</em> only.</li>
+        <li>Generate a token for it: pick the app, expiration <em>Never</em>, permission <strong>ads_read</strong> only.</li>
+        <li>
+          In Vercel, add <code className="rounded bg-panel-2 px-1">META_ACCESS_TOKEN</code> with that token, then redeploy.
+        </li>
+      </ol>
+    </section>
+  );
+}
+
+function Listings({ ga4, search, meta }: { ga4: Listing<Ga4Property>; search: Listing<SearchSite>; meta: Listing<MetaAdAccount> }) {
+  const problems = [
+    ga4 && "error" in ga4 ? `GA4: ${ga4.error}` : null,
+    search && "error" in search ? `Search Console: ${search.error}` : null,
+    meta && "error" in meta ? `Meta: ${meta.error}` : null,
+  ].filter(Boolean);
   if (!problems.length) return null;
   return (
     <div className="mb-4 rounded-lg border border-amber-700/50 bg-amber-950/20 px-4 py-2 text-sm text-amber-100">

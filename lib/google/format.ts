@@ -31,6 +31,8 @@ export function formatMetric(value: number, format: MetricFormat, short = false)
       return `${(value * 100).toFixed(value >= 0.1 ? 1 : 2)}%`;
     case "decimal":
       return value.toFixed(1);
+    case "multiple":
+      return `${value.toFixed(2)}x`;
     case "duration": {
       const seconds = Math.round(value);
       return seconds >= 60 ? `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s` : `${seconds}s`;

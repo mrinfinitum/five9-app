@@ -15,7 +15,7 @@ export function rangeFor(key: string | undefined) {
 }
 
 /** `currency:USD` etc. formats as money in that currency. */
-export type MetricFormat = "number" | "percent" | "duration" | "decimal" | `currency:${string}`;
+export type MetricFormat = "number" | "percent" | "duration" | "decimal" | "multiple" | `currency:${string}`;
 export type Total = { key: string; label: string; current: number; previous: number; format: MetricFormat; lowerIsBetter?: boolean };
 export type TrendSeries = { key: string; label: string; format: MetricFormat; current: number[]; previous: number[] };
 export type Trend = { dates: string[]; previousDates: string[]; series: TrendSeries[] };
@@ -41,14 +41,14 @@ function addDays(day: string, days: number) {
 }
 
 /** Ends yesterday (today is still incomplete), in the property's own time zone. */
-function windowFor(days: number, timeZone: string): Window {
+export function windowFor(days: number, timeZone: string): Window {
   const end = addDays(today(timeZone), -1);
   const start = addDays(end, -(days - 1));
   const previousEnd = addDays(start, -1);
   return { start, end, previousStart: addDays(previousEnd, -(days - 1)), previousEnd };
 }
 
-function dayList(start: string, days: number) {
+export function dayList(start: string, days: number) {
   return Array.from({ length: days }, (_, i) => addDays(start, i));
 }
 

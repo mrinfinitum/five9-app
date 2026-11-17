@@ -24,14 +24,15 @@ export type WebSite = {
   slug: string;
   ga4PropertyId: string | null;
   searchConsoleSite: string | null;
+  metaAdAccountId: string | null;
 };
 
-/** Every board, with its linked GA4 property and Search Console site (if any). */
+/** Every board, with its linked GA4 property, Search Console site and Meta ad account (if any). */
 export async function listWebSites(): Promise<WebSite[]> {
   const admin = createAdminClient();
   const [boards, sites] = await Promise.all([
     admin.from("boards").select("id, name, slug").order("name"),
-    admin.from("web_analytics_sites").select("board_id, ga4_property_id, search_console_site"),
+    admin.from("web_analytics_sites").select("board_id, ga4_property_id, search_console_site, meta_ad_account_id"),
   ]);
   if (boards.error) throw new Error(boards.error.message);
   if (sites.error) throw new Error(sites.error.message);
@@ -42,5 +43,6 @@ export async function listWebSites(): Promise<WebSite[]> {
     slug: b.slug,
     ga4PropertyId: byBoard.get(b.id)?.ga4_property_id ?? null,
     searchConsoleSite: byBoard.get(b.id)?.search_console_site ?? null,
+    metaAdAccountId: byBoard.get(b.id)?.meta_ad_account_id ?? null,
   }));
 }

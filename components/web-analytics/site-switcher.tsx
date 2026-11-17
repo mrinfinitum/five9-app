@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export type SwitcherSite = { slug: string; name: string; hasGa4: boolean; hasSearch: boolean };
+export type SwitcherSite = { slug: string; name: string; hasGa4: boolean; hasSearch: boolean; hasMeta?: boolean };
 
 /** The client list: a searchable sidebar on wide screens, a dropdown on phones. */
 export function SiteSwitcher({
@@ -61,6 +61,7 @@ export function SiteSwitcher({
                   <span className="flex gap-1 text-[0.6rem] font-bold uppercase text-muted">
                     {s.hasGa4 ? <span title="Google Analytics linked">GA</span> : null}
                     {s.hasSearch ? <span title="Search Console linked">SC</span> : null}
+                    {s.hasMeta ? <span title="Meta ads linked">Ads</span> : null}
                   </span>
                 </Link>
               </li>
