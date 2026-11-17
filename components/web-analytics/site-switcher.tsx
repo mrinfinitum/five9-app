@@ -12,17 +12,20 @@ export function SiteSwitcher({
   sites,
   selected,
   range,
+  view,
   basePath = "/web",
 }: {
   sites: SwitcherSite[];
   selected: string;
   range?: string;
+  /** The report tab to keep open when switching clients (it falls back if the client doesn't have it). */
+  view?: string;
   /** The page each client links to, e.g. "/web/weekly". A string, not a function: this is a client component. */
   basePath?: string;
 }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
-  const href = (slug: string) => `${basePath}?client=${encodeURIComponent(slug)}${range ? `&range=${range}` : ""}`;
+  const href = (slug: string) => `${basePath}?client=${encodeURIComponent(slug)}${range ? `&range=${range}` : ""}${view ? `&view=${view}` : ""}`;
   const shown = sites.filter((s) => s.name.toLowerCase().includes(query.trim().toLowerCase()));
 
   return (

@@ -13,6 +13,14 @@ import { metaAdsReport } from "@/lib/meta/ads";
 
 export const metadata = { title: "Web analytics" };
 
+/** One report at a time; the tab is kept in the URL (?view=) so it survives switching client or range. */
+const VIEWS = [
+  { key: "analytics", label: "Google Analytics" },
+  { key: "search", label: "Search Console" },
+  { key: "meta", label: "Meta ads" },
+] as const;
+type ViewKey = (typeof VIEWS)[number]["key"];
+
 export default function WebAnalyticsPage({ searchParams }: PageProps<"/web">) {
   return (
     <main className="mx-auto w-full max-w-[1500px] px-4 py-8 sm:px-6">
@@ -33,6 +41,14 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/web">["se
   // Only the clients (and the parts of each) this person has been given.
   const sites = await visibleWebSites(user.id);
   const site = sites.find((s) => s.slug === one(params.client)) ?? sites[0];
+  // Tabs for what this client has linked and this person may see; an unavailable ?view= falls back to the first.
+  const views = site
+    ? VIEWS.filter((v) =>
+        v.key === "analytics" ? site.canWeb && site.ga4PropertyId : v.key === "search" ? site.canWeb && site.searchConsoleSite : site.canMeta && site.metaAdAccountId,
+      )
+    : [];
+  const view: ViewKey | undefined = (views.find((v) => v.key === one(params.view)) ?? views[0])?.key;
+  const href = (client: string, rangeKey: string, viewKey = view) => `/web?client=${encodeURIComponent(client)}&range=${rangeKey}${viewKey ? `&view=${viewKey}` : ""}`;
 
   return (
     <>
@@ -51,7 +67,7 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/web">["se
                 <Link
                   aria-current={r.key === range.key ? "true" : undefined}
                   className={`rounded-md px-3 py-1.5 text-xs font-semibold ${r.key === range.key ? "bg-brand text-on-brand" : "text-muted hover:text-white"}`}
-                  href={`/web?client=${encodeURIComponent(site.slug)}&range=${r.key}`}
+                  href={href(site.slug, r.key)}
                   key={r.key}
                 >
                   {r.label}
@@ -91,21 +107,34 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/web">["se
             <SiteSwitcher
               range={range.key}
               selected={site.slug}
+              view={view}
               sites={sites.map((s) => ({ slug: s.slug, name: s.name, hasGa4: s.canWeb && Boolean(s.ga4PropertyId), hasSearch: s.canWeb && Boolean(s.searchConsoleSite), hasMeta: s.canMeta }))}
             />
           </aside>
-          <div className="min-w-0 space-y-10">
-            {site.canWeb ? (
-              <>
-                <Suspense fallback={<SectionSkeleton title="Google Analytics" />} key={`ga:${site.boardId}:${range.key}`}>
-                  <Ga4Section days={range.days} site={site} />
-                </Suspense>
-                <Suspense fallback={<SectionSkeleton title="Search Console" />} key={`sc:${site.boardId}:${range.key}`}>
-                  <SearchSection days={range.days} site={site} />
-                </Suspense>
-              </>
-            ) : null}
-            {site.canMeta && site.metaAdAccountId ? (
+          <div className="min-w-0 space-y-4">
+            <nav aria-label="Report" className="flex overflow-x-auto border-b border-line">
+              {views.map((v) => (
+                <Link
+                  aria-current={v.key === view ? "page" : undefined}
+                  className={`-mb-px whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-semibold ${
+                    v.key === view ? "border-brand text-white" : "border-transparent text-muted hover:text-white"
+                  }`}
+                  href={href(site.slug, range.key, v.key)}
+                  key={v.key}
+                >
+                  {v.label}
+                </Link>
+              ))}
+            </nav>
+            {view === "analytics" ? (
+              <Suspense fallback={<SectionSkeleton title="Google Analytics" />} key={`ga:${site.boardId}:${range.key}`}>
+                <Ga4Section days={range.days} site={site} />
+              </Suspense>
+            ) : view === "search" ? (
+              <Suspense fallback={<SectionSkeleton title="Search Console" />} key={`sc:${site.boardId}:${range.key}`}>
+                <SearchSection days={range.days} site={site} />
+              </Suspense>
+            ) : view === "meta" && site.metaAdAccountId ? (
               <Suspense fallback={<SectionSkeleton title="Meta ads" />} key={`meta:${site.boardId}:${range.key}`}>
                 <MetaSection adAccountId={site.metaAdAccountId} days={range.days} />
               </Suspense>
