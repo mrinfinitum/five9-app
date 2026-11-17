@@ -35,6 +35,9 @@ const contentSecurityPolicy = [
   ...(isDev ? [] : ["upgrade-insecure-requests"]),
 ].join("; ");
 
+// Only the production deployment may be indexed; previews and local dev never.
+const isProduction = process.env.VERCEL_ENV === "production";
+
 const securityHeaders = [
   { key: "Content-Security-Policy", value: contentSecurityPolicy },
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
@@ -43,6 +46,7 @@ const securityHeaders = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()" },
   { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+  ...(isProduction ? [] : [{ key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" }]),
 ];
 
 const nextConfig: NextConfig = {
